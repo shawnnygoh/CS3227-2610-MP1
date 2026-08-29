@@ -3,8 +3,10 @@ package koko.model;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -19,6 +21,49 @@ public final class KokoData {
      * Creates an empty Koko data set.
      */
     public KokoData() {
+    }
+
+    /**
+     * Restores a complete data set while reapplying every collection and reference invariant.
+     *
+     * @param restoredCards ordered globally stored cards
+     * @param restoredDecks ordered decks
+     * @return a validated restored data set
+     * @throws IllegalArgumentException if identities, content, names, or references are invalid
+     * @throws NullPointerException if a collection or element is null
+     */
+    public static KokoData restore(List<VocabularyCard> restoredCards,
+            List<Deck> restoredDecks) {
+        KokoData restored = new KokoData();
+        List<VocabularyCard> cards = List.copyOf(Objects.requireNonNull(
+                restoredCards, "Vocabulary cards cannot be null"));
+        List<Deck> decksToRestore = List.copyOf(Objects.requireNonNull(
+                restoredDecks, "Decks cannot be null"));
+        Set<UUID> cardIds = new HashSet<>();
+        for (VocabularyCard card : cards) {
+            Objects.requireNonNull(card, "Vocabulary card cannot be null");
+            if (!cardIds.add(card.id())) {
+                throw new IllegalArgumentException("Vocabulary card ID is duplicated");
+            }
+            restored.ensureVocabularyIsUnique(card);
+            restored.vocabularyCards.add(card);
+        }
+
+        Set<UUID> deckIds = new HashSet<>();
+        for (Deck deck : decksToRestore) {
+            Objects.requireNonNull(deck, "Deck cannot be null");
+            if (!deckIds.add(deck.id())) {
+                throw new IllegalArgumentException("Deck ID is duplicated");
+            }
+            restored.ensureDeckNameIsUnique(deck);
+            for (UUID cardId : deck.cardIds()) {
+                if (!cardIds.contains(cardId)) {
+                    throw new IllegalArgumentException("Deck references an unknown card");
+                }
+            }
+            restored.decks.add(deck);
+        }
+        return restored;
     }
 
     /**

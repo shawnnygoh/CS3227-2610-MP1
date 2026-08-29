@@ -42,6 +42,30 @@ public final class VocabularyCard {
     }
 
     /**
+     * Restores a card with its persisted identity and mode-specific progress.
+     *
+     * @param id stable card UUID
+     * @param hiragana Hiragana text stored on this card
+     * @param romaji romaji pronunciation stored on this card
+     * @param englishMeaning English meaning stored on this card
+     * @param flashcardProgress persisted flashcard progress
+     * @param typingProgress persisted typing progress
+     * @return the restored vocabulary card
+     * @throws IllegalArgumentException if any text is blank
+     * @throws NullPointerException if an argument is null
+     */
+    public static VocabularyCard restore(UUID id, String hiragana, String romaji,
+            String englishMeaning, ModeProgress flashcardProgress,
+            ModeProgress typingProgress) {
+        Objects.requireNonNull(flashcardProgress, "Flashcard progress cannot be null");
+        Objects.requireNonNull(typingProgress, "Typing progress cannot be null");
+        Map<Mode, ModeProgress> progress = new EnumMap<>(Mode.class);
+        progress.put(Mode.FLASHCARD, flashcardProgress);
+        progress.put(Mode.TYPING, typingProgress);
+        return new VocabularyCard(id, hiragana, romaji, englishMeaning, progress);
+    }
+
+    /**
      * Changes the card text while preserving identity and both progress records.
      *
      * @param newHiragana replacement Hiragana text
