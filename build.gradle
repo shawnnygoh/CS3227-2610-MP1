@@ -21,6 +21,15 @@ checkstyle {
     toolVersion = '11.0.0'
 }
 
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.14.1'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.14.1'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
