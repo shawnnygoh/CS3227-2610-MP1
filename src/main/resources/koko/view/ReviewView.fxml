@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane fx:controller="koko.controller.ReviewController"
+        xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1"
+        styleClass="review-shell">
+    <top>
+        <VBox styleClass="header" spacing="5">
+            <Label text="Flashcard review" styleClass="app-title" />
+            <Label text="Recognize the Japanese word, then reveal its pronunciation and meaning."
+                   styleClass="subtitle" wrapText="true" />
+        </VBox>
+    </top>
+    <center>
+        <VBox alignment="TOP_CENTER" spacing="18" styleClass="review-content"
+              fillWidth="true">
+            <VBox maxWidth="680" spacing="8" styleClass="review-progress">
+                <Label fx:id="progressLabel" text="Preparing review..." styleClass="progress-text" />
+                <ProgressBar fx:id="progressBar" progress="0" maxWidth="1.7976931348623157E308"
+                             accessibleText="Review progress" />
+            </VBox>
+            <VBox alignment="CENTER" maxWidth="680" minHeight="220" spacing="14"
+                  styleClass="prompt-card" VBox.vgrow="ALWAYS">
+                <VBox fx:id="promptPanel" alignment="CENTER" spacing="14">
+                    <Label text="Hiragana" styleClass="card-label" />
+                    <Label fx:id="promptLabel" text="" styleClass="hiragana-prompt"
+                           wrapText="true" textAlignment="CENTER" />
+                </VBox>
+                <HBox fx:id="answerPanel" alignment="TOP_CENTER" spacing="24"
+                      styleClass="answer-panel" visible="false" managed="false">
+                    <VBox alignment="TOP_CENTER" spacing="5" minWidth="0" prefWidth="0"
+                          HBox.hgrow="ALWAYS">
+                        <Label text="Romaji" styleClass="card-label" />
+                        <Label fx:id="romajiLabel" text="" styleClass="romaji-answer"
+                               wrapText="true" textAlignment="CENTER" />
+                    </VBox>
+                    <VBox alignment="TOP_CENTER" spacing="5" minWidth="0" prefWidth="0"
+                          HBox.hgrow="ALWAYS">
+                        <Label text="English meaning" styleClass="card-label" />
+                        <Label fx:id="meaningLabel" text="" styleClass="meaning-answer"
+                               wrapText="true" textAlignment="CENTER" />
+                    </VBox>
+                </HBox>
+                <Label fx:id="summaryLabel" text="" styleClass="review-summary"
+                       wrapText="true" visible="false" managed="false" />
+            </VBox>
+            <Label fx:id="feedbackLabel" text="" styleClass="review-feedback"
+                   maxWidth="680" wrapText="true" visible="false" managed="false" />
+            <HBox alignment="CENTER" spacing="10">
+                <Button fx:id="revealButton" text="Reveal" onAction="#reveal"
+                        styleClass="primary-button" mnemonicParsing="true" defaultButton="true" />
+                <Button fx:id="correctButton" text="Correct" onAction="#markCorrect"
+                        styleClass="correct-button" mnemonicParsing="true" />
+                <Button fx:id="incorrectButton" text="Incorrect" onAction="#markIncorrect"
+                        styleClass="incorrect-button" mnemonicParsing="true" />
+                <Button fx:id="stopButton" text="Stop" onAction="#stop"
+                        styleClass="danger-button" mnemonicParsing="true">
+                    <HBox.margin>
+                        <Insets left="14" />
+                    </HBox.margin>
+                </Button>
+            </HBox>
+        </VBox>
+    </center>
+    <bottom>
+        <HBox alignment="CENTER_RIGHT" styleClass="review-footer">
+            <Button fx:id="returnButton" text="Back to Home"
+                    onAction="#returnToManagement" styleClass="secondary-button"
+                    mnemonicParsing="true" />
+        </HBox>
+    </bottom>
+</BorderPane>

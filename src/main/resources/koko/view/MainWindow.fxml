@@ -9,7 +9,7 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
-<BorderPane fx:controller="koko.controller.MainController"
+<BorderPane fx:id="managementRoot" fx:controller="koko.controller.MainController"
         xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1"
         styleClass="app-shell">
     <top>
@@ -43,6 +43,9 @@
                     <HBox spacing="8">
                         <Button fx:id="addCardButton" text="Add card" onAction="#addCard"
                                 styleClass="primary-button" mnemonicParsing="true" />
+                        <Button fx:id="reviewSelectedCardButton" text="Review selected"
+                                onAction="#reviewSelectedCard" styleClass="secondary-button"
+                                mnemonicParsing="true" />
                         <Button fx:id="editCardButton" text="Edit" onAction="#editCard"
                                 styleClass="secondary-button" mnemonicParsing="true" />
                         <Button fx:id="deleteCardButton" text="Delete" onAction="#deleteCard"
@@ -63,6 +66,9 @@
                         <ListView fx:id="deckList" minHeight="60" prefHeight="75"
                                   VBox.vgrow="ALWAYS" accessibleText="Study decks" />
                         <HBox spacing="8">
+                            <Button fx:id="reviewDueButton" text="Review due"
+                                    onAction="#reviewDueCards" styleClass="primary-button"
+                                    mnemonicParsing="true" />
                             <Button fx:id="openDeckButton" text="Open" onAction="#openDeck"
                                     styleClass="secondary-button" mnemonicParsing="true" />
                             <Button fx:id="renameDeckButton" text="Rename" onAction="#renameDeck"

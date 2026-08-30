@@ -126,6 +126,100 @@
     -fx-cursor: default;
 }
 
+.button:focused {
+    -fx-border-color: #245743;
+    -fx-border-width: 2;
+    -fx-border-radius: 6;
+}
+
+.review-shell {
+    -fx-background-color: #f3f7f3;
+}
+
+.review-content {
+    -fx-padding: 24;
+}
+
+.review-progress {
+    -fx-padding: 4 0 0 0;
+}
+
+.progress-text {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #365f50;
+}
+
+.progress-bar {
+    -fx-accent: #347b58;
+}
+
+.prompt-card {
+    -fx-background-color: white;
+    -fx-background-radius: 12;
+    -fx-border-color: #c8ded0;
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+    -fx-padding: 28;
+}
+
+.card-label {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #789084;
+}
+
+.hiragana-prompt {
+    -fx-font-size: 44px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #245743;
+}
+
+.answer-panel {
+    -fx-padding: 12 30 0 30;
+    -fx-border-color: #d8e7db transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+}
+
+.romaji-answer {
+    -fx-font-size: 22px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #2f5d50;
+}
+
+.meaning-answer {
+    -fx-font-size: 18px;
+    -fx-text-fill: #365f50;
+}
+
+.review-summary {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-line-spacing: 4px;
+    -fx-text-fill: #2f5d50;
+}
+
+.review-feedback {
+    -fx-background-color: #fff4e6;
+    -fx-background-radius: 7;
+    -fx-padding: 10;
+    -fx-text-fill: #81552d;
+}
+
+.correct-button {
+    -fx-background-color: #d8f0df;
+    -fx-text-fill: #24603e;
+}
+
+.incorrect-button {
+    -fx-background-color: #f7e1de;
+    -fx-text-fill: #9a463e;
+}
+
+.review-footer {
+    -fx-padding: 8 24 16 24;
+}
+
 .guidance {
     -fx-background-color: #2f5d50;
     -fx-padding: 12 24 14 24;

@@ -1,12 +1,18 @@
 package koko.controller;
 
+import java.io.IOException;
+import java.net.URL;
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
@@ -17,9 +23,12 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
+import javafx.util.Callback;
 import koko.model.Deck;
 import koko.model.VocabularyCard;
+import koko.review.FlashcardSession;
 import koko.service.KokoService;
 import koko.storage.StorageException;
 
@@ -31,9 +40,17 @@ import koko.storage.StorageException;
  */
 public final class MainController {
 
+    private static final String REVIEW_VIEW_RESOURCE = "/koko/view/ReviewView.fxml";
+
     private final KokoService service;
     private final String startupError;
+    private final Clock clock;
+    private final Callback<Class<?>, Object> controllerFactory;
+    private FlashcardSession activeReview;
+    private Scene managementScene;
 
+    @FXML
+    private BorderPane managementRoot;
     @FXML
     private ListView<VocabularyCard> vocabularyList;
     @FXML
@@ -66,6 +83,10 @@ public final class MainController {
     private Button addToDeckButton;
     @FXML
     private Button removeFromDeckButton;
+    @FXML
+    private Button reviewSelectedCardButton;
+    @FXML
+    private Button reviewDueButton;
 
     /**
      * Creates a controller for the already-created application service.
@@ -74,8 +95,30 @@ public final class MainController {
      * @param startupError controlled load error, or null when startup loaded normally.
      */
     public MainController(KokoService service, String startupError) {
-        this.service = service;
+        this(service, startupError, Clock.systemDefaultZone(), type -> {
+            if (type == ReviewController.class) {
+                return new ReviewController();
+            }
+            throw new IllegalStateException("Unexpected FXML controller: " + type.getName());
+        });
+    }
+
+    /**
+     * Creates a controller with the shared application clock and FXML factory.
+     *
+     * @param service service used by this scene.
+     * @param startupError controlled load error, or null when startup loaded normally.
+     * @param clock clock used to establish review session dates.
+     * @param controllerFactory factory used when loading the review view.
+     * @throws NullPointerException if an argument is null.
+     */
+    public MainController(KokoService service, String startupError, Clock clock,
+            Callback<Class<?>, Object> controllerFactory) {
+        this.service = java.util.Objects.requireNonNull(service, "Service cannot be null");
         this.startupError = startupError;
+        this.clock = java.util.Objects.requireNonNull(clock, "Clock cannot be null");
+        this.controllerFactory = java.util.Objects.requireNonNull(controllerFactory,
+                "Controller factory cannot be null");
     }
 
     /**
@@ -146,6 +189,34 @@ public final class MainController {
             }
             input = promptCard(null, input);
         }
+    }
+
+    @FXML
+    private void reviewSelectedCard() {
+        if (!reviewCanStart()) {
+            return;
+        }
+        VocabularyCard selected = vocabularyList.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            setGuidance("Select a global vocabulary card to review it.");
+            return;
+        }
+        startReview(() -> FlashcardSession.forCard(service, selected.id(), clock),
+                "Reviewing the selected global card.");
+    }
+
+    @FXML
+    private void reviewDueCards() {
+        if (!reviewCanStart()) {
+            return;
+        }
+        Deck selected = deckList.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            setGuidance("Select a deck to review its due flashcards.");
+            return;
+        }
+        startReview(() -> FlashcardSession.forDeck(service, selected.id(), clock),
+                "Reviewing due flashcards from “" + selected.name() + "”.");
     }
 
     @FXML
@@ -285,15 +356,19 @@ public final class MainController {
     private void showHelp() {
         Alert help = new Alert(Alert.AlertType.INFORMATION);
         help.setTitle("Koko help");
-        help.setHeaderText("Vocabulary and deck management");
-        help.setContentText("Vocabulary is global: create, edit, or delete cards in the left panel.\n\n"
+        help.setHeaderText("How Koko works");
+        help.setContentText("On the Home screen, create, edit, or delete global vocabulary cards "
+                + "in the left panel.\n\n"
                 + "Decks are reusable collections of those cards. Select a deck, open it, and "
                 + "add existing cards. Removing a card from a deck does not delete it from the "
                 + "global vocabulary.\n\n"
                 + "You can rename or delete a deck. Deleting a deck does not delete its cards "
                 + "from the global vocabulary or other decks.\n\n"
                 + "Deleting a global card removes it from every deck, and always asks for confirmation.\n\n"
-                + "Koko saves after each successful change.");
+                + "Review due flashcards from a selected deck, or review one selected global card "
+                + "even when it is not due or assigned to a deck. Reveal the romaji and English "
+                + "meaning before choosing Correct or Incorrect. Stop keeps unanswered cards "
+                + "unanswered, and Koko saves each recorded outcome.");
         help.showAndWait();
         setGuidance("Tip: build a global vocabulary first, then reuse cards across multiple decks.");
     }
@@ -301,6 +376,7 @@ public final class MainController {
     private void refreshViews() {
         UUID selectedCardId = selectedId(vocabularyList);
         UUID selectedDeckId = selectedId(deckList);
+        UUID selectedDeckCardId = selectedId(deckCardList);
         vocabularyList.setItems(FXCollections.observableArrayList(service.data().vocabularyCards()));
         deckList.setItems(FXCollections.observableArrayList(service.data().decks()));
         restoreSelection(vocabularyList, selectedCardId);
@@ -313,6 +389,7 @@ public final class MainController {
         deckEmptyState.setVisible(!hasDecks);
         deckEmptyState.setManaged(deckEmptyState.isVisible());
         renderSelectedDeck();
+        restoreSelection(deckCardList, selectedDeckCardId);
         updateButtonStates();
     }
 
@@ -337,16 +414,19 @@ public final class MainController {
         boolean hasDeck = deckList.getSelectionModel().getSelectedItem() != null;
         boolean hasDeckCard = deckCardList.getSelectionModel().getSelectedItem() != null;
         boolean storageReady = startupError == null;
-        addCardButton.setDisable(!storageReady);
-        editCardButton.setDisable(!storageReady || !hasCard);
-        deleteCardButton.setDisable(!storageReady || !hasCard);
-        createDeckButton.setDisable(!storageReady);
+        boolean reviewActive = activeReview != null;
+        addCardButton.setDisable(!storageReady || reviewActive);
+        editCardButton.setDisable(!storageReady || !hasCard || reviewActive);
+        deleteCardButton.setDisable(!storageReady || !hasCard || reviewActive);
+        createDeckButton.setDisable(!storageReady || reviewActive);
         openDeckButton.setDisable(!hasDeck);
-        renameDeckButton.setDisable(!storageReady || !hasDeck);
-        deleteDeckButton.setDisable(!storageReady || !hasDeck);
+        renameDeckButton.setDisable(!storageReady || !hasDeck || reviewActive);
+        deleteDeckButton.setDisable(!storageReady || !hasDeck || reviewActive);
         addToDeckButton.setDisable(!storageReady || !hasDeck
-                || service.data().vocabularyCards().isEmpty());
-        removeFromDeckButton.setDisable(!storageReady || !hasDeckCard);
+                || service.data().vocabularyCards().isEmpty() || reviewActive);
+        removeFromDeckButton.setDisable(!storageReady || !hasDeckCard || reviewActive);
+        reviewSelectedCardButton.setDisable(!storageReady || !hasCard || reviewActive);
+        reviewDueButton.setDisable(!storageReady || !hasDeck || reviewActive);
     }
 
     private CardInput promptCard(VocabularyCard existing, CardInput initialValues) {
@@ -411,6 +491,9 @@ public final class MainController {
     }
 
     private boolean runMutation(String successMessage, Mutation mutation) {
+        if (activeReview != null) {
+            return false;
+        }
         try {
             mutation.run();
             refreshViews();
@@ -430,6 +513,64 @@ public final class MainController {
 
     private void setGuidance(String message) {
         guidanceLabel.setText(message);
+    }
+
+    private boolean reviewCanStart() {
+        return startupError == null && activeReview == null;
+    }
+
+    private void startReview(SessionFactory sessionFactory, String guidance) {
+        try {
+            FlashcardSession session = sessionFactory.create();
+            loadReviewView(session, guidance);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            showError("Review could not start", exception.getMessage()
+                    + "\n\nCheck the selection and try again.");
+        } catch (IOException | RuntimeException exception) {
+            showError("Review view could not open", exception.getMessage());
+        }
+    }
+
+    private void loadReviewView(FlashcardSession session, String guidance) throws IOException {
+        URL resource = MainController.class.getResource(REVIEW_VIEW_RESOURCE);
+        if (resource == null) {
+            throw new IllegalStateException("Required resource not found on classpath: "
+                    + REVIEW_VIEW_RESOURCE);
+        }
+        FXMLLoader loader = new FXMLLoader(resource);
+        loader.setControllerFactory(controllerFactory);
+        Parent reviewRoot = loader.load();
+        ReviewController reviewController = loader.getController();
+        managementScene = managementRoot.getScene();
+        activeReview = session;
+        try {
+            reviewController.configure(session, this::returnToManagement);
+            managementScene.setRoot(reviewRoot);
+        } catch (RuntimeException exception) {
+            activeReview = null;
+            managementScene = null;
+            throw exception;
+        }
+        setGuidance(guidance);
+    }
+
+    private void returnToManagement() {
+        if (activeReview == null || managementScene == null) {
+            return;
+        }
+        if (activeReview.state() == FlashcardSession.State.PROMPT
+                || activeReview.state() == FlashcardSession.State.ANSWER_REVEALED) {
+            activeReview.stop();
+            return;
+        }
+        FlashcardSession.Summary summary = activeReview.summary();
+        activeReview = null;
+        managementScene.setRoot(managementRoot);
+        refreshViews();
+        setGuidance("Returned to Home: " + summary.attempted()
+                + " attempted, " + summary.correct() + " correct, "
+                + summary.incorrect() + " incorrect, " + summary.remaining() + " remaining.");
+        managementScene = null;
     }
 
     private void showError(String header, String message) {
@@ -470,6 +611,11 @@ public final class MainController {
     @FunctionalInterface
     private interface Mutation {
         void run() throws StorageException;
+    }
+
+    @FunctionalInterface
+    private interface SessionFactory {
+        FlashcardSession create();
     }
 
     private record CardInput(String hiragana, String romaji, String englishMeaning) {
