@@ -69,7 +69,7 @@
                             <Button fx:id="reviewDueButton" text="Review due"
                                     onAction="#reviewDueCards" styleClass="primary-button"
                                     mnemonicParsing="true" />
-                            <Button fx:id="openDeckButton" text="Open" onAction="#openDeck"
+                            <Button fx:id="reviewAllButton" text="Review all" onAction="#reviewAllCards"
                                     styleClass="secondary-button" mnemonicParsing="true" />
                             <Button fx:id="renameDeckButton" text="Rename" onAction="#renameDeck"
                                     styleClass="secondary-button" mnemonicParsing="true" />
@@ -97,7 +97,7 @@
         <VBox styleClass="guidance" spacing="4">
             <Label text="Sensei" styleClass="guidance-title" />
             <Label fx:id="guidanceLabel"
-                   text="Start by adding a global vocabulary card, then create a deck to reuse it."
+                   text="Select a deck to display its cards, then choose Review due or Review all."
                    styleClass="guidance-text" wrapText="true" />
         </VBox>
     </bottom>

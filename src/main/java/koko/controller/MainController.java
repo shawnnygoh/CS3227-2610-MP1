@@ -41,6 +41,7 @@ import koko.storage.StorageException;
 public final class MainController {
 
     private static final String REVIEW_VIEW_RESOURCE = "/koko/view/ReviewView.fxml";
+    private static final String HELP_VIEW_RESOURCE = "/koko/view/HelpView.fxml";
 
     private final KokoService service;
     private final String startupError;
@@ -72,7 +73,7 @@ public final class MainController {
     @FXML
     private Button addCardButton;
     @FXML
-    private Button openDeckButton;
+    private Button reviewAllButton;
     @FXML
     private Button renameDeckButton;
     @FXML
@@ -220,6 +221,20 @@ public final class MainController {
     }
 
     @FXML
+    private void reviewAllCards() {
+        if (!reviewCanStart()) {
+            return;
+        }
+        Deck selected = deckList.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            setGuidance("Select a deck to review all of its flashcards.");
+            return;
+        }
+        startReview(() -> FlashcardSession.forAllCardsInDeck(service, selected.id(), clock),
+                "Reviewing all flashcards from “" + selected.name() + "”.");
+    }
+
+    @FXML
     private void editCard() {
         VocabularyCard selected = vocabularyList.getSelectionModel().getSelectedItem();
         if (selected == null) {
@@ -270,14 +285,6 @@ public final class MainController {
                 return;
             }
             name = promptDeckName(name);
-        }
-    }
-
-    @FXML
-    private void openDeck() {
-        Deck selected = deckList.getSelectionModel().getSelectedItem();
-        if (selected != null) {
-            setGuidance("Opened “" + selected.name() + "”. Add global cards using Add card.");
         }
     }
 
@@ -354,23 +361,28 @@ public final class MainController {
 
     @FXML
     private void showHelp() {
-        Alert help = new Alert(Alert.AlertType.INFORMATION);
+        Parent content;
+        try {
+            URL resource = MainController.class.getResource(HELP_VIEW_RESOURCE);
+            if (resource == null) {
+                throw new IOException("Required resource not found on classpath: " + HELP_VIEW_RESOURCE);
+            }
+            content = FXMLLoader.load(resource);
+        } catch (IOException exception) {
+            showError("Help could not open", exception.getMessage());
+            return;
+        }
+        Dialog<Void> help = new Dialog<>();
+        help.initOwner(managementRoot.getScene().getWindow());
         help.setTitle("Koko help");
         help.setHeaderText("How Koko works");
-        help.setContentText("On the Home screen, create, edit, or delete global vocabulary cards "
-                + "in the left panel.\n\n"
-                + "Decks are reusable collections of those cards. Select a deck, open it, and "
-                + "add existing cards. Removing a card from a deck does not delete it from the "
-                + "global vocabulary.\n\n"
-                + "You can rename or delete a deck. Deleting a deck does not delete its cards "
-                + "from the global vocabulary or other decks.\n\n"
-                + "Deleting a global card removes it from every deck, and always asks for confirmation.\n\n"
-                + "Review due flashcards from a selected deck, or review one selected global card "
-                + "even when it is not due or assigned to a deck. Reveal the romaji and English "
-                + "meaning before choosing Correct or Incorrect. Stop keeps unanswered cards "
-                + "unanswered, and Koko saves each recorded outcome.");
+        help.setResizable(true);
+        help.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        help.getDialogPane().getStylesheets().addAll(managementRoot.getScene().getStylesheets());
+        help.getDialogPane().getStyleClass().add("help-dialog");
+        help.getDialogPane().setContent(content);
         help.showAndWait();
-        setGuidance("Tip: build a global vocabulary first, then reuse cards across multiple decks.");
+        setGuidance("Tip: select a deck to display its cards, then choose Review due or Review all.");
     }
 
     private void refreshViews() {
@@ -399,7 +411,7 @@ public final class MainController {
                 : selected.name() + " · " + selected.cardIds().size() + " card(s)");
         if (selected == null) {
             deckCardList.setItems(FXCollections.observableArrayList());
-            deckCardList.setPlaceholder(new Label("Open a deck to see its cards."));
+            deckCardList.setPlaceholder(new Label("Select a deck to see its cards."));
             return;
         }
         var cards = selected.cardIds().stream()
@@ -419,7 +431,7 @@ public final class MainController {
         editCardButton.setDisable(!storageReady || !hasCard || reviewActive);
         deleteCardButton.setDisable(!storageReady || !hasCard || reviewActive);
         createDeckButton.setDisable(!storageReady || reviewActive);
-        openDeckButton.setDisable(!hasDeck);
+        reviewAllButton.setDisable(!storageReady || !hasDeck || reviewActive);
         renameDeckButton.setDisable(!storageReady || !hasDeck || reviewActive);
         deleteDeckButton.setDisable(!storageReady || !hasDeck || reviewActive);
         addToDeckButton.setDisable(!storageReady || !hasDeck

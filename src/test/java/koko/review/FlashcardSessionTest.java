@@ -1,6 +1,7 @@
 package koko.review;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -18,6 +19,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import koko.model.Deck;
 import koko.model.KokoData;
@@ -61,6 +65,14 @@ class FlashcardSessionTest {
                 FlashcardSession.forCard(context.service, missingId, null));
         assertThrows(NullPointerException.class, () ->
                 FlashcardSession.forDeck(context.service, missingId, null));
+        assertThrows(NullPointerException.class, () ->
+                FlashcardSession.forAllCardsInDeck(null, missingId, FIXED_CLOCK));
+        assertThrows(NullPointerException.class, () ->
+                FlashcardSession.forAllCardsInDeck(context.service, null, FIXED_CLOCK));
+        assertThrows(NullPointerException.class, () ->
+                FlashcardSession.forAllCardsInDeck(context.service, missingId, null));
+        assertThrows(IllegalArgumentException.class, () ->
+                FlashcardSession.forAllCardsInDeck(context.service, missingId, FIXED_CLOCK));
 
         assertSame(originalData, context.service.data());
         assertEquals(0, context.storage.saveInvocations);
@@ -77,6 +89,65 @@ class FlashcardSessionTest {
         assertEquals(FlashcardSession.State.COMPLETED, session.state());
         assertEquals(new FlashcardSession.Summary(0, 0, 0, 0, 0, false), session.summary());
         assertTrue(session.currentPrompt().isEmpty());
+    }
+
+    @Test
+    void allCardsFollowMembershipOrderAndIncludeFutureCardsAfterIncorrect()
+            throws StorageException {
+        TestContext context = new TestContext();
+        VocabularyCard libraryFirst = context.addCard("あ", "a", "first");
+        VocabularyCard librarySecond = context.addCard("い", "i", "second");
+        VocabularyCard libraryThird = context.addCard("う", "u", "third");
+        setDueDate(libraryFirst, START_DATE.plusDays(5));
+        setDueDate(librarySecond, START_DATE.minusDays(1));
+        setDueDate(libraryThird, START_DATE);
+        Deck deck = context.service.createDeck("Core");
+        addToDeck(context.service, deck, libraryThird, libraryFirst, librarySecond);
+        int savesBeforeSession = context.storage.saveInvocations;
+
+        FlashcardSession session = FlashcardSession.forAllCardsInDeck(
+                context.service, deck.id(), FIXED_CLOCK);
+        List<UUID> order = new ArrayList<>();
+        while (session.state() == FlashcardSession.State.PROMPT) {
+            UUID cardId = session.currentCardId().orElseThrow();
+            order.add(cardId);
+            session.reveal(cardId);
+            session.submit(cardId, cardId.equals(libraryFirst.id())
+                    ? ReviewOutcome.INCORRECT : ReviewOutcome.CORRECT);
+        }
+
+        assertEquals(List.of(libraryThird.id(), libraryFirst.id(), librarySecond.id()), order);
+        assertEquals(new FlashcardSession.Summary(3, 2, 1, 3, 0, false), session.summary());
+        assertEquals(3, context.storage.saveInvocations - savesBeforeSession);
+        assertEquals(3, context.storage.successfulSaveCount - savesBeforeSession);
+    }
+
+    @Test
+    void allCardsIncludeFutureOnlyCardsAndEmptyDecksCompleteWithoutSaving()
+            throws StorageException {
+        TestContext context = new TestContext();
+        VocabularyCard future = context.addCard("み", "mi", "future");
+        setDueDate(future, START_DATE.plusDays(10));
+        Deck futureDeck = context.service.createDeck("Future");
+        context.service.addCardToDeck(futureDeck.id(), future.id());
+        FlashcardSession futureSession = FlashcardSession.forAllCardsInDeck(
+                context.service, futureDeck.id(), FIXED_CLOCK);
+        assertEquals(FlashcardSession.State.PROMPT, futureSession.state());
+        futureSession.reveal(future.id());
+        futureSession.submit(future.id(), ReviewOutcome.CORRECT);
+        assertEquals(FlashcardSession.State.COMPLETED, futureSession.state());
+
+        Deck emptyDeck = context.service.createDeck("Empty");
+        int savesBeforeEmptySession = context.storage.saveInvocations;
+        FlashcardSession emptySession = FlashcardSession.forAllCardsInDeck(
+                context.service, emptyDeck.id(), FIXED_CLOCK);
+
+        assertEquals(FlashcardSession.State.COMPLETED, emptySession.state());
+        assertEquals(new FlashcardSession.Summary(0, 0, 0, 0, 0, false), emptySession.summary());
+        assertFalse(emptySession.stopped());
+        assertTrue(emptySession.currentPrompt().isEmpty());
+        assertEquals(savesBeforeEmptySession, context.storage.saveInvocations);
+        assertEquals(savesBeforeEmptySession, context.storage.successfulSaveCount);
     }
 
     @Test
@@ -150,6 +221,34 @@ class FlashcardSessionTest {
     }
 
     @Test
+    void allCardQueueStaysFrozenAfterMembershipChangesAndResolvesCurrentText()
+            throws StorageException {
+        TestContext context = new TestContext();
+        VocabularyCard first = context.addCard("ね", "ne", "root");
+        VocabularyCard second = context.addCard("こ", "ko", "child");
+        VocabularyCard addedLater = context.addCard("い", "i", "new");
+        Deck deck = context.service.createDeck("Words");
+        addToDeck(context.service, deck, first, second);
+        FlashcardSession session = FlashcardSession.forAllCardsInDeck(
+                context.service, deck.id(), FIXED_CLOCK);
+
+        context.service.addCardToDeck(deck.id(), addedLater.id());
+        context.service.removeCardFromDeck(deck.id(), second.id());
+        context.service.editVocabularyCard(first.id(), "ねー", "ne", "updated");
+
+        assertEquals(2, session.summary().initialQueueSize());
+        assertEquals("ねー", session.currentPrompt().orElseThrow().hiragana());
+        session.reveal(first.id());
+        session.submit(first.id(), ReviewOutcome.CORRECT);
+        assertEquals(second.id(), session.currentCardId().orElseThrow());
+        assertTrue(context.service.data().findVocabularyCard(second.id()).isPresent());
+        session.reveal(second.id());
+        session.submit(second.id(), ReviewOutcome.INCORRECT);
+        assertEquals(FlashcardSession.State.COMPLETED, session.state());
+        assertEquals(new FlashcardSession.Summary(2, 1, 1, 2, 0, false), session.summary());
+    }
+
+    @Test
     void transitionsRejectEarlyRepeatedStaleNullAndSkippedEvents() throws StorageException {
         TestContext context = new TestContext();
         VocabularyCard first = context.addCard("ね", "ne", "root");
@@ -193,18 +292,24 @@ class FlashcardSessionTest {
         assertEquals(FlashcardSession.State.COMPLETED, session.state());
     }
 
-    @Test
-    void stopPreservesCurrentCardAndRepeatedStop() throws StorageException {
+    @ParameterizedTest
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    void stopPreservesCurrentCardAndRepeatedStop(boolean reviewAll, boolean revealBeforeStop)
+            throws StorageException {
         TestContext context = new TestContext();
         VocabularyCard first = context.addCard("ね", "ne", "root");
         VocabularyCard second = context.addCard("こ", "ko", "child");
         Deck deck = context.service.createDeck("Words");
         addToDeck(context.service, deck, first, second);
-        FlashcardSession session = FlashcardSession.forDeck(
-                context.service, deck.id(), FIXED_CLOCK);
+        int savesBeforeSession = context.storage.saveInvocations;
+        FlashcardSession session = createDeckSession(context, deck, reviewAll);
         List<ModeProgress> originalProgress = progressSnapshots(context.service);
         int savesBeforeStops = context.storage.saveInvocations;
 
+        if (revealBeforeStop) {
+            session.reveal(first.id());
+        }
+        assertEquals(savesBeforeSession, context.storage.saveInvocations);
         session.stop();
         FlashcardSession.Summary stopped = session.summary();
         session.stop();
@@ -230,15 +335,16 @@ class FlashcardSessionTest {
         assertEquals(savesBeforeStops, context.storage.saveInvocations);
     }
 
-    @Test
-    void stopAfterSuccessfulAnswerPreservesProgressAndDoesNotSave() throws StorageException {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void stopAfterSuccessfulAnswerPreservesProgressAndDoesNotSave(boolean reviewAll)
+            throws StorageException {
         TestContext context = new TestContext();
         VocabularyCard first = context.addCard("ね", "ne", "root");
         VocabularyCard second = context.addCard("こ", "ko", "child");
         Deck deck = context.service.createDeck("Words");
         addToDeck(context.service, deck, first, second);
-        FlashcardSession session = FlashcardSession.forDeck(
-                context.service, deck.id(), FIXED_CLOCK);
+        FlashcardSession session = createDeckSession(context, deck, reviewAll);
         session.reveal(first.id());
         session.submit(first.id(), ReviewOutcome.CORRECT);
         List<ModeProgress> progressBeforeStop = progressSnapshots(context.service);
@@ -253,12 +359,16 @@ class FlashcardSessionTest {
         assertEquals(savesBeforeStop, context.storage.saveInvocations);
     }
 
-    @Test
-    void stopAfterFailedSaveLeavesOutcomeUnrecordedAndDoesNotSaveAgain() throws StorageException {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void stopAfterFailedSaveLeavesOutcomeUnrecordedAndDoesNotSaveAgain(boolean reviewAll)
+            throws StorageException {
         TestContext context = new TestContext();
         VocabularyCard card = context.addCard("ね", "ne", "root");
-        FlashcardSession session = FlashcardSession.forCard(
-                context.service, card.id(), FIXED_CLOCK);
+        Deck deck = context.service.createDeck("Words");
+        context.service.addCardToDeck(deck.id(), card.id());
+        FlashcardSession session = reviewAll ? createDeckSession(context, deck, true)
+                : FlashcardSession.forCard(context.service, card.id(), FIXED_CLOCK);
         session.reveal(card.id());
         List<ModeProgress> originalProgress = progressSnapshots(context.service);
         int savesBeforeFailure = context.storage.saveInvocations;
@@ -278,16 +388,16 @@ class FlashcardSessionTest {
         assertEquals(savesBeforeFailure + 1, context.storage.saveInvocations);
     }
 
-    @Test
-    void saveFailuresAtFirstMiddleAndFinalCardCanBeRetried() throws StorageException {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void saveFailuresAtFirstMiddleAndFinalCardCanBeRetried(boolean reviewAll) throws StorageException {
         TestContext context = new TestContext();
         VocabularyCard first = context.addCard("あ", "a", "a");
         VocabularyCard second = context.addCard("い", "i", "i");
         VocabularyCard third = context.addCard("う", "u", "u");
         Deck deck = context.service.createDeck("Core");
         addToDeck(context.service, deck, first, second, third);
-        FlashcardSession session = FlashcardSession.forDeck(
-                context.service, deck.id(), FIXED_CLOCK);
+        FlashcardSession session = createDeckSession(context, deck, reviewAll);
         int savesBeforeSession = context.storage.saveInvocations;
 
         answerWithRetry(context, session, first, ReviewOutcome.CORRECT);
@@ -327,6 +437,47 @@ class FlashcardSessionTest {
     }
 
     @Test
+    void allCardEarlyOutcomesScheduleOnSubmissionDateAndLeaveTypingUnchanged()
+            throws StorageException {
+        AtomicReference<Instant> currentInstant = new AtomicReference<>(
+                Instant.parse("2026-08-30T01:00:00Z"));
+        InstantSource source = currentInstant::get;
+        Clock clock = source.withZone(ZoneId.of("Asia/Singapore"));
+        TestContext context = new TestContext(clock);
+        VocabularyCard correct = context.addCard("か", "ka", "correct");
+        VocabularyCard incorrect = context.addCard("き", "ki", "incorrect");
+        ModeProgress correctTyping = new ModeProgress(2, 4, 3,
+                START_DATE.minusDays(2), START_DATE.plusDays(5));
+        ModeProgress incorrectTyping = new ModeProgress(3, 5, 4,
+                START_DATE.minusDays(3), START_DATE.plusDays(6));
+        correct.updateProgress(Mode.TYPING, correctTyping);
+        incorrect.updateProgress(Mode.TYPING, incorrectTyping);
+        setDueDate(correct, START_DATE.plusDays(20));
+        setDueDate(incorrect, START_DATE.plusDays(20));
+        Deck deck = context.service.createDeck("Early");
+        addToDeck(context.service, deck, correct, incorrect);
+        FlashcardSession session = FlashcardSession.forAllCardsInDeck(
+                context.service, deck.id(), clock);
+
+        currentInstant.set(Instant.parse("2026-08-31T16:00:00Z"));
+        session.reveal(correct.id());
+        session.submit(correct.id(), ReviewOutcome.CORRECT);
+        session.reveal(incorrect.id());
+        session.submit(incorrect.id(), ReviewOutcome.INCORRECT);
+
+        VocabularyCard updatedCorrect = context.service.data()
+                .findVocabularyCard(correct.id()).orElseThrow();
+        VocabularyCard updatedIncorrect = context.service.data()
+                .findVocabularyCard(incorrect.id()).orElseThrow();
+        assertProgressEquals(new ModeProgress(1, 1, 1, LocalDate.of(2026, 9, 1),
+                LocalDate.of(2026, 9, 2)), updatedCorrect.progressFor(Mode.FLASHCARD));
+        assertProgressEquals(new ModeProgress(0, 1, 0, LocalDate.of(2026, 9, 1),
+                LocalDate.of(2026, 9, 2)), updatedIncorrect.progressFor(Mode.FLASHCARD));
+        assertProgressEquals(correctTyping, updatedCorrect.progressFor(Mode.TYPING));
+        assertProgressEquals(incorrectTyping, updatedIncorrect.progressFor(Mode.TYPING));
+    }
+
+    @Test
     void sharedGlobalProgressAccumulatesAndTypingIsUnaffected() throws StorageException {
         TestContext context = new TestContext();
         VocabularyCard shared = context.addCard("ほ", "ho", "ear");
@@ -351,6 +502,38 @@ class FlashcardSessionTest {
         assertEquals(1, updated.progressFor(Mode.FLASHCARD).correctAttempts());
         assertEquals(4, updated.progressFor(Mode.TYPING).attempts());
         assertEquals(3, updated.progressFor(Mode.TYPING).correctAttempts());
+    }
+
+    @Test
+    void repeatedAllCardSessionsStartFreshAndDueEligibilityUsesSharedProgress()
+            throws StorageException {
+        TestContext context = new TestContext();
+        VocabularyCard shared = context.addCard("ほ", "ho", "ear");
+        Deck first = context.service.createDeck("First");
+        Deck second = context.service.createDeck("Second");
+        context.service.addCardToDeck(first.id(), shared.id());
+        context.service.addCardToDeck(second.id(), shared.id());
+
+        FlashcardSession firstSession = FlashcardSession.forAllCardsInDeck(
+                context.service, first.id(), FIXED_CLOCK);
+        firstSession.reveal(shared.id());
+        firstSession.submit(shared.id(), ReviewOutcome.CORRECT);
+
+        FlashcardSession dueSession = FlashcardSession.forDeck(
+                context.service, second.id(), FIXED_CLOCK);
+        FlashcardSession secondSession = FlashcardSession.forAllCardsInDeck(
+                context.service, second.id(), FIXED_CLOCK);
+
+        assertEquals(FlashcardSession.State.COMPLETED, dueSession.state());
+        assertEquals(new FlashcardSession.Summary(0, 0, 0, 0, 0, false), dueSession.summary());
+        assertEquals(FlashcardSession.State.PROMPT, secondSession.state());
+        assertEquals(new FlashcardSession.Summary(1, 0, 0, 0, 1, false), secondSession.summary());
+        secondSession.reveal(shared.id());
+        secondSession.submit(shared.id(), ReviewOutcome.INCORRECT);
+
+        ModeProgress progress = context.service.data().findVocabularyCard(shared.id()).orElseThrow()
+                .progressFor(Mode.FLASHCARD);
+        assertProgressEquals(new ModeProgress(0, 2, 1, START_DATE, START_DATE.plusDays(1)), progress);
     }
 
     @Test
@@ -417,18 +600,55 @@ class FlashcardSessionTest {
     private static void answerWithRetry(TestContext context, FlashcardSession session,
             VocabularyCard card, ReviewOutcome outcome) throws StorageException {
         session.reveal(card.id());
-        int attemptedBeforeFailure = session.attempted();
-        int correctBeforeFailure = session.correct();
-        int incorrectBeforeFailure = session.incorrect();
-        int remainingBeforeFailure = session.remaining();
+        KokoData dataBeforeFailure = context.service.data();
+        List<ModeProgress> progressBeforeFailure = progressSnapshots(context.service);
+        FlashcardSession.Answer answerBeforeFailure = session.currentAnswer().orElseThrow();
+        FlashcardSession.Summary summaryBeforeFailure = session.summary();
+        int saveInvocationsBeforeFailure = context.storage.saveInvocations;
+        int successfulSavesBeforeFailure = context.storage.successfulSaveCount;
+        ModeProgress typingBeforeFailure = context.service.data().findVocabularyCard(card.id())
+                .orElseThrow().progressFor(Mode.TYPING);
         context.storage.failNextSave = true;
         assertThrows(StorageException.class, () -> session.submit(card.id(), outcome));
+        assertSame(dataBeforeFailure, context.service.data());
+        assertEquals(progressBeforeFailure, progressSnapshots(context.service));
         assertEquals(FlashcardSession.State.ANSWER_REVEALED, session.state());
-        assertEquals(attemptedBeforeFailure, session.attempted());
-        assertEquals(correctBeforeFailure, session.correct());
-        assertEquals(incorrectBeforeFailure, session.incorrect());
-        assertEquals(remainingBeforeFailure, session.remaining());
+        assertEquals(card.id(), session.currentCardId().orElseThrow());
+        assertEquals(answerBeforeFailure, session.currentAnswer().orElseThrow());
+        assertEquals(summaryBeforeFailure, session.summary());
+        assertEquals(saveInvocationsBeforeFailure + 1, context.storage.saveInvocations);
+        assertEquals(successfulSavesBeforeFailure, context.storage.successfulSaveCount);
         session.submit(card.id(), outcome);
+        assertEquals(saveInvocationsBeforeFailure + 2, context.storage.saveInvocations);
+        assertEquals(successfulSavesBeforeFailure + 1, context.storage.successfulSaveCount);
+        assertEquals(summaryBeforeFailure.attempted() + 1, session.attempted());
+        assertEquals(summaryBeforeFailure.remaining() - 1, session.remaining());
+        VocabularyCard updated = context.service.data().findVocabularyCard(card.id()).orElseThrow();
+        int correct = outcome == ReviewOutcome.CORRECT ? 1 : 0;
+        assertProgressEquals(new ModeProgress(correct, 1, correct, START_DATE, START_DATE.plusDays(1)),
+                updated.progressFor(Mode.FLASHCARD));
+        assertProgressEquals(typingBeforeFailure, updated.progressFor(Mode.TYPING));
+        assertThrows(IllegalStateException.class, () -> session.submit(card.id(), outcome));
+        assertEquals(saveInvocationsBeforeFailure + 2, context.storage.saveInvocations);
+    }
+
+    /**
+     * Starts a due session or an all-card session with future-due test cards.
+     *
+     * @param context service and storage used by the test.
+     * @param deck deck whose members will be reviewed.
+     * @param reviewAll whether to make the members future-due and review them early.
+     * @return a session using the requested entry point.
+     */
+    private static FlashcardSession createDeckSession(TestContext context, Deck deck, boolean reviewAll) {
+        if (reviewAll) {
+            for (UUID cardId : deck.cardIds()) {
+                setDueDate(context.service.data().findVocabularyCard(cardId).orElseThrow(),
+                        START_DATE.plusDays(10));
+            }
+            return FlashcardSession.forAllCardsInDeck(context.service, deck.id(), FIXED_CLOCK);
+        }
+        return FlashcardSession.forDeck(context.service, deck.id(), FIXED_CLOCK);
     }
 
     private static void addToDeck(KokoService service, Deck deck, VocabularyCard... cards)
@@ -442,6 +662,14 @@ class FlashcardSessionTest {
         ModeProgress original = card.progressFor(Mode.FLASHCARD);
         card.updateProgress(Mode.FLASHCARD, new ModeProgress(original.mastery(), original.attempts(),
                 original.correctAttempts(), original.lastReviewedDate(), dueDate));
+    }
+
+    private static void assertProgressEquals(ModeProgress expected, ModeProgress actual) {
+        assertEquals(expected.mastery(), actual.mastery());
+        assertEquals(expected.attempts(), actual.attempts());
+        assertEquals(expected.correctAttempts(), actual.correctAttempts());
+        assertEquals(expected.lastReviewedDate(), actual.lastReviewedDate());
+        assertEquals(expected.nextDueDate(), actual.nextDueDate());
     }
 
     /**
@@ -485,6 +713,7 @@ class FlashcardSessionTest {
 
         private KokoData loadedData = new KokoData();
         private int saveInvocations;
+        private int successfulSaveCount;
         private boolean failNextSave;
 
         @Override
@@ -500,6 +729,7 @@ class FlashcardSessionTest {
                 throw new StorageException("forced save failure", null);
             }
             loadedData = data;
+            successfulSaveCount++;
         }
     }
 }

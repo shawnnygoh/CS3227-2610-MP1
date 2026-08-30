@@ -221,8 +221,7 @@ public final class ReviewController {
         answerPanel.setVisible(false);
         answerPanel.setManaged(false);
         summaryLabel.setText(summary.initialQueueSize() == 0
-                ? "No due flashcards are waiting in this deck. Cards scheduled for later are not"
-                        + " included."
+                ? "No cards in this review queue."
                 : "Attempted: " + summary.attempted() + "\nCorrect: " + summary.correct()
                         + "\nIncorrect: " + summary.incorrect() + "\nRemaining: "
                         + summary.remaining() + "\nStatus: "

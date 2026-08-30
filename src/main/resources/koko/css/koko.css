@@ -235,3 +235,39 @@
     -fx-font-size: 13px;
     -fx-text-fill: white;
 }
+
+.help-dialog {
+    -fx-font-family: "System";
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
+}
+
+.help-dialog .header-panel .label {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}
+
+.help-scroll,
+.help-scroll > .viewport {
+    -fx-background-color: white;
+}
+
+.help-content {
+    -fx-padding: 16 20 16 16;
+}
+
+.help-content .label {
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
+    -fx-text-fill: #2d4238;
+    -fx-line-spacing: 2px;
+}
+
+.help-content .subsection-title {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.help-content .help-action {
+    -fx-font-weight: bold;
+}
