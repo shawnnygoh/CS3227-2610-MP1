@@ -34,20 +34,27 @@
                     <Label wrapText="true" minHeight="-Infinity"
                            text="One selected global card, even if it is not due or does not belong to a deck." />
                 </VBox>
+                <VBox spacing="3" minWidth="0">
+                    <Label text="Typing due" styleClass="help-action" />
+                    <Label wrapText="true" minHeight="-Infinity"
+                           text="Cards due for the independent English-to-Hiragana typing mode in the selected deck, oldest due first. Type the exact Hiragana answer; surrounding whitespace and NFC-equivalent text are accepted, but Romaji and extra or missing characters are not." />
+                </VBox>
             </VBox>
             <VBox spacing="8" minWidth="0">
                 <Label text="During a review" styleClass="subsection-title" />
                 <Label wrapText="true" minHeight="-Infinity"
                        text="Read the Hiragana, then choose Reveal to see Romaji and English meaning. Only then choose Correct or Incorrect. Incorrect cards are not repeated in the same session." />
                 <Label wrapText="true" minHeight="-Infinity"
+                       text="In English-to-Hiragana Typing, enter the Hiragana and choose Submit, or choose Skip. Both record an attempt and show feedback. Choose Next to advance; Stop ends the session without changing unanswered cards." />
+                <Label wrapText="true" minHeight="-Infinity"
                        text="Stop leaves unanswered cards unchanged. After stopping or finishing, choose Back to Home." />
             </VBox>
             <VBox spacing="8" minWidth="0">
                 <Label text="Progress and saving" styleClass="subsection-title" />
                 <Label wrapText="true" minHeight="-Infinity"
-                       text="Flashcard progress is shared across decks. Every recorded answer, including an early review, updates mastery, counts, and scheduling from the date you answer. Typing progress stays unchanged." />
+                       text="Flashcard progress is shared across decks, and Typing progress is separately shared across decks. Every recorded outcome updates only its mode's progress from the date you answer. Early Flashcard reviews also change mastery and scheduling. A skipped typing outcome leaves mastery and correct count unchanged, counts as an attempt, and is due tomorrow." />
                 <Label wrapText="true" minHeight="-Infinity"
-                       text="Koko saves each outcome automatically. If saving fails, no progress is recorded: retry Correct or Incorrect, or choose Stop." />
+                       text="Koko saves each outcome automatically. If saving fails, no progress is recorded. Retry Correct or Incorrect in Flashcard, or Submit or Skip in Typing. You can also choose Stop." />
             </VBox>
         </VBox>
     </content>

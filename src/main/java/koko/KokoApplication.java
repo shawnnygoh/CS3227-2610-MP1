@@ -12,6 +12,7 @@ import javafx.stage.Stage;
 import javafx.util.Callback;
 import koko.controller.MainController;
 import koko.controller.ReviewController;
+import koko.controller.TypingReviewController;
 import koko.service.KokoService;
 import koko.storage.JsonStorage;
 import koko.storage.StorageException;
@@ -123,6 +124,9 @@ public class KokoApplication extends Application {
             }
             if (type == ReviewController.class) {
                 return new ReviewController();
+            }
+            if (type == TypingReviewController.class) {
+                return new TypingReviewController();
             }
             throw new IllegalStateException("Unexpected FXML controller: " + type.getName());
         }

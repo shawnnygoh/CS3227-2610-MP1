@@ -53,7 +53,7 @@
                     </HBox>
                 </VBox>
                 <VBox styleClass="panel" spacing="10" VBox.vgrow="ALWAYS">
-                    <VBox styleClass="deck-selector" spacing="8" minHeight="180" prefHeight="180"
+                    <VBox styleClass="deck-selector" spacing="8" minHeight="214" prefHeight="214"
                           VBox.vgrow="NEVER">
                         <HBox alignment="CENTER_LEFT" spacing="8">
                             <Label text="Deck selection" styleClass="section-title" HBox.hgrow="ALWAYS" />
@@ -71,6 +71,11 @@
                                     mnemonicParsing="true" />
                             <Button fx:id="reviewAllButton" text="Review all" onAction="#reviewAllCards"
                                     styleClass="secondary-button" mnemonicParsing="true" />
+                            <Button fx:id="typingDueButton" text="Typing due"
+                                    onAction="#reviewTypingDueCards" styleClass="primary-button"
+                                    mnemonicParsing="true" />
+                        </HBox>
+                        <HBox spacing="8">
                             <Button fx:id="renameDeckButton" text="Rename" onAction="#renameDeck"
                                     styleClass="secondary-button" mnemonicParsing="true" />
                             <Button fx:id="deleteDeckButton" text="Delete deck" onAction="#deleteDeck"
@@ -97,7 +102,7 @@
         <VBox styleClass="guidance" spacing="4">
             <Label text="Sensei" styleClass="guidance-title" />
             <Label fx:id="guidanceLabel"
-                   text="Select a deck to display its cards, then choose Review due or Review all."
+                   text="Select a deck to display its cards, then choose a review mode."
                    styleClass="guidance-text" wrapText="true" />
         </VBox>
     </bottom>

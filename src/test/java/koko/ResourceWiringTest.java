@@ -16,6 +16,7 @@ class ResourceWiringTest {
     void applicationResourcesArePackagedAtStablePaths() {
         assertNotNull(resource("/koko/view/MainWindow.fxml"));
         assertNotNull(resource("/koko/view/ReviewView.fxml"));
+        assertNotNull(resource("/koko/view/TypingReviewView.fxml"));
         assertNotNull(resource("/koko/view/HelpView.fxml"));
         assertNotNull(resource("/koko/css/koko.css"));
     }

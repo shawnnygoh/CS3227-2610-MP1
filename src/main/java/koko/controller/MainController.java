@@ -29,6 +29,7 @@ import javafx.util.Callback;
 import koko.model.Deck;
 import koko.model.VocabularyCard;
 import koko.review.FlashcardSession;
+import koko.review.TypingSession;
 import koko.service.KokoService;
 import koko.storage.StorageException;
 
@@ -41,6 +42,7 @@ import koko.storage.StorageException;
 public final class MainController {
 
     private static final String REVIEW_VIEW_RESOURCE = "/koko/view/ReviewView.fxml";
+    private static final String TYPING_REVIEW_VIEW_RESOURCE = "/koko/view/TypingReviewView.fxml";
     private static final String HELP_VIEW_RESOURCE = "/koko/view/HelpView.fxml";
 
     private final KokoService service;
@@ -48,6 +50,7 @@ public final class MainController {
     private final Clock clock;
     private final Callback<Class<?>, Object> controllerFactory;
     private FlashcardSession activeReview;
+    private TypingSession activeTypingReview;
     private Scene managementScene;
 
     @FXML
@@ -88,6 +91,8 @@ public final class MainController {
     private Button reviewSelectedCardButton;
     @FXML
     private Button reviewDueButton;
+    @FXML
+    private Button typingDueButton;
 
     /**
      * Creates a controller for the already-created application service.
@@ -99,6 +104,9 @@ public final class MainController {
         this(service, startupError, Clock.systemDefaultZone(), type -> {
             if (type == ReviewController.class) {
                 return new ReviewController();
+            }
+            if (type == TypingReviewController.class) {
+                return new TypingReviewController();
             }
             throw new IllegalStateException("Unexpected FXML controller: " + type.getName());
         });
@@ -232,6 +240,20 @@ public final class MainController {
         }
         startReview(() -> FlashcardSession.forAllCardsInDeck(service, selected.id(), clock),
                 "Reviewing all flashcards from “" + selected.name() + "”.");
+    }
+
+    @FXML
+    private void reviewTypingDueCards() {
+        if (!reviewCanStart()) {
+            return;
+        }
+        Deck selected = deckList.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            setGuidance("Select a deck to review its due typing cards.");
+            return;
+        }
+        startTypingReview(() -> TypingSession.forDeck(service, selected.id(), clock),
+                "Typing review from “" + selected.name() + "”.");
     }
 
     @FXML
@@ -382,7 +404,7 @@ public final class MainController {
         help.getDialogPane().getStyleClass().add("help-dialog");
         help.getDialogPane().setContent(content);
         help.showAndWait();
-        setGuidance("Tip: select a deck to display its cards, then choose Review due or Review all.");
+        setGuidance("Tip: select a deck to display its cards, then choose a review mode.");
     }
 
     private void refreshViews() {
@@ -426,7 +448,7 @@ public final class MainController {
         boolean hasDeck = deckList.getSelectionModel().getSelectedItem() != null;
         boolean hasDeckCard = deckCardList.getSelectionModel().getSelectedItem() != null;
         boolean storageReady = startupError == null;
-        boolean reviewActive = activeReview != null;
+        boolean reviewActive = reviewActive();
         addCardButton.setDisable(!storageReady || reviewActive);
         editCardButton.setDisable(!storageReady || !hasCard || reviewActive);
         deleteCardButton.setDisable(!storageReady || !hasCard || reviewActive);
@@ -439,6 +461,7 @@ public final class MainController {
         removeFromDeckButton.setDisable(!storageReady || !hasDeckCard || reviewActive);
         reviewSelectedCardButton.setDisable(!storageReady || !hasCard || reviewActive);
         reviewDueButton.setDisable(!storageReady || !hasDeck || reviewActive);
+        typingDueButton.setDisable(!storageReady || !hasDeck || reviewActive);
     }
 
     private CardInput promptCard(VocabularyCard existing, CardInput initialValues) {
@@ -503,7 +526,7 @@ public final class MainController {
     }
 
     private boolean runMutation(String successMessage, Mutation mutation) {
-        if (activeReview != null) {
+        if (reviewActive()) {
             return false;
         }
         try {
@@ -528,7 +551,7 @@ public final class MainController {
     }
 
     private boolean reviewCanStart() {
-        return startupError == null && activeReview == null;
+        return startupError == null && !reviewActive();
     }
 
     private void startReview(SessionFactory sessionFactory, String guidance) {
@@ -566,23 +589,78 @@ public final class MainController {
         setGuidance(guidance);
     }
 
+    private void startTypingReview(TypingSessionFactory sessionFactory, String guidance) {
+        try {
+            TypingSession session = sessionFactory.create();
+            loadTypingReviewView(session, guidance);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            showError("Typing review could not start", exception.getMessage()
+                    + "\n\nCheck the selection and try again.");
+        } catch (IOException | RuntimeException exception) {
+            showError("Typing review view could not open", exception.getMessage());
+        }
+    }
+
+    private void loadTypingReviewView(TypingSession session, String guidance) throws IOException {
+        URL resource = MainController.class.getResource(TYPING_REVIEW_VIEW_RESOURCE);
+        if (resource == null) {
+            throw new IllegalStateException("Required resource not found on classpath: "
+                    + TYPING_REVIEW_VIEW_RESOURCE);
+        }
+        FXMLLoader loader = new FXMLLoader(resource);
+        loader.setControllerFactory(controllerFactory);
+        Parent reviewRoot = loader.load();
+        TypingReviewController reviewController = loader.getController();
+        managementScene = managementRoot.getScene();
+        activeTypingReview = session;
+        try {
+            reviewController.configure(session, this::returnToManagement);
+            managementScene.setRoot(reviewRoot);
+        } catch (RuntimeException exception) {
+            activeTypingReview = null;
+            managementScene = null;
+            throw exception;
+        }
+        setGuidance(guidance);
+    }
+
     private void returnToManagement() {
-        if (activeReview == null || managementScene == null) {
+        if (!reviewActive() || managementScene == null) {
             return;
         }
-        if (activeReview.state() == FlashcardSession.State.PROMPT
-                || activeReview.state() == FlashcardSession.State.ANSWER_REVEALED) {
-            activeReview.stop();
-            return;
+        if (activeReview != null) {
+            if (activeReview.state() == FlashcardSession.State.PROMPT
+                    || activeReview.state() == FlashcardSession.State.ANSWER_REVEALED) {
+                activeReview.stop();
+                return;
+            }
+            FlashcardSession.Summary summary = activeReview.summary();
+            activeReview = null;
+            managementScene.setRoot(managementRoot);
+            refreshViews();
+            setGuidance("Returned to Home: " + summary.attempted()
+                    + " attempted, " + summary.correct() + " correct, "
+                    + summary.incorrect() + " incorrect, " + summary.remaining() + " remaining.");
+        } else {
+            if (activeTypingReview.state() == TypingSession.State.PROMPT
+                    || activeTypingReview.state() == TypingSession.State.FEEDBACK) {
+                activeTypingReview.stop(activeTypingReview.currentCardId().orElseThrow());
+                return;
+            }
+            TypingSession.Summary summary = activeTypingReview.summary();
+            activeTypingReview = null;
+            managementScene.setRoot(managementRoot);
+            refreshViews();
+            setGuidance("Returned to Home: " + summary.attempted()
+                    + " attempted, " + summary.correct() + " correct, "
+                    + summary.incorrect() + " incorrect, " + summary.skipped()
+                    + " skipped, " + summary.remaining() + " remaining.");
         }
-        FlashcardSession.Summary summary = activeReview.summary();
-        activeReview = null;
-        managementScene.setRoot(managementRoot);
-        refreshViews();
-        setGuidance("Returned to Home: " + summary.attempted()
-                + " attempted, " + summary.correct() + " correct, "
-                + summary.incorrect() + " incorrect, " + summary.remaining() + " remaining.");
         managementScene = null;
+    }
+
+    private boolean reviewActive() {
+        return activeReview != null || activeTypingReview != null;
     }
 
     private void showError(String header, String message) {
@@ -628,6 +706,11 @@ public final class MainController {
     @FunctionalInterface
     private interface SessionFactory {
         FlashcardSession create();
+    }
+
+    @FunctionalInterface
+    private interface TypingSessionFactory {
+        TypingSession create();
     }
 
     private record CardInput(String hiragana, String romaji, String englishMeaning) {
