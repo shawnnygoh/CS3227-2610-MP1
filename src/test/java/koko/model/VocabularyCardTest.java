@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 
@@ -37,6 +38,14 @@ class VocabularyCardTest {
         assertEquals("が", card.hiragana());
         assertEquals("neko", card.romaji());
         assertEquals("cat", card.englishMeaning());
+    }
+
+    @Test
+    void cardNormalisesDecomposedRomajiBeforeValidationAndStorage() {
+        VocabularyCard card = new VocabularyCard("こーひー", "ko\u0304hi\u0304",
+                "coffee", CREATION_DATE);
+
+        assertEquals("kōhī", card.romaji());
     }
 
     @Test
@@ -107,6 +116,25 @@ class VocabularyCardTest {
         assertThrows(NullPointerException.class, () -> card.updateProgress(Mode.FLASHCARD, null));
         assertThrows(NullPointerException.class, () -> card.progressFor(null));
         assertNull(card.progressFor(Mode.FLASHCARD).lastReviewedDate());
+    }
+
+    @Test
+    void blankCardFieldsAreReportedTogether() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                new VocabularyCard("", "neko", "", CREATION_DATE));
+
+        assertTrue(exception.getMessage().contains("Hiragana"));
+        assertTrue(exception.getMessage().contains("English meaning"));
+    }
+
+    @Test
+    void cardFieldsRejectTheWrongCharacterScript() {
+        assertThrows(IllegalArgumentException.class, () ->
+                new VocabularyCard("猫", "neko", "cat", CREATION_DATE));
+        assertThrows(IllegalArgumentException.class, () ->
+                new VocabularyCard("ねこ", "ネコ", "cat", CREATION_DATE));
+        assertThrows(IllegalArgumentException.class, () ->
+                new VocabularyCard("ねこ", "neko", "猫", CREATION_DATE));
     }
 
     private static void assertInvalidCard(Class<? extends Throwable> expectedException,

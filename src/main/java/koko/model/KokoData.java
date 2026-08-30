@@ -143,8 +143,9 @@ public final class KokoData {
     public void editVocabularyCard(UUID cardId, String newHiragana, String newRomaji,
             String newEnglishMeaning) {
         VocabularyCard card = requireVocabularyCard(cardId);
+        VocabularyCard.validateContent(newHiragana, newRomaji, newEnglishMeaning);
         String normalisedHiragana = VocabularyCard.normaliseHiragana(newHiragana);
-        String normalisedMeaning = requireNonBlank(newEnglishMeaning, "English meaning");
+        String normalisedMeaning = VocabularyCard.normaliseEnglishMeaning(newEnglishMeaning);
         boolean duplicate = vocabularyCards.stream().anyMatch(existing -> existing != card
                 && existing.hiragana().equals(normalisedHiragana)
                 && existing.englishMeaning().equalsIgnoreCase(normalisedMeaning));

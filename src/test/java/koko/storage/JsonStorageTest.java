@@ -87,6 +87,19 @@ class JsonStorageTest {
     }
 
     @Test
+    void roundTripNormalisesCanonicallyEquivalentRomaji() throws StorageException {
+        Path path = temporaryDirectory.resolve("decomposed-romaji.json");
+        JsonStorage storage = new JsonStorage(path);
+        KokoData original = new KokoData();
+        original.addVocabularyCard("こーひー", "ko\u0304hi\u0304", "coffee", CREATION_DATE);
+
+        storage.save(original);
+        KokoData loaded = storage.load();
+
+        assertEquals("kōhī", loaded.vocabularyCards().get(0).romaji());
+    }
+
+    @Test
     void saveCreatesMissingParentDirectories() throws StorageException {
         Path path = temporaryDirectory.resolve("nested/data/koko-data.json");
 
@@ -198,6 +211,13 @@ class JsonStorageTest {
 
         assertRejected(badCardId);
         assertRejected(badDate);
+    }
+
+    @Test
+    void schemaOneDataWithOutOfPolicyCharactersIsRejected() throws IOException {
+        String invalidRomaji = cardJson(CARD_ID, 0).replace(
+                "\"romaji\":\"neko\"", "\"romaji\":\"ねこ\"");
+        assertRejected(document("1", "[" + invalidRomaji + "]", "[]"));
     }
 
     @Test

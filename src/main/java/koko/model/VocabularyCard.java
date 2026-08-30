@@ -2,13 +2,20 @@ package koko.model;
 
 import java.text.Normalizer;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
 /**
  * A globally stored vocabulary entry with independent progress per learning mode.
+ *
+ * <p>Hiragana content accepts Hiragana characters, spaces, and the Japanese
+ * prolonged sound mark. Romaji and English meaning accept Latin characters,
+ * digits, spaces, and common punctuation. Accepted text is normalized to
+ * Unicode NFC before validation and storage.
  */
 public final class VocabularyCard {
 
@@ -25,7 +32,7 @@ public final class VocabularyCard {
      * @param romaji romaji pronunciation stored on this card
      * @param englishMeaning English meaning stored on this card
      * @param creationDate date used as the initial due date
-     * @throws IllegalArgumentException if any text is blank
+     * @throws IllegalArgumentException if any text is blank or uses invalid characters
      * @throws NullPointerException if any text or creationDate is null
      */
     public VocabularyCard(String hiragana, String romaji, String englishMeaning,
@@ -51,7 +58,7 @@ public final class VocabularyCard {
      * @param flashcardProgress persisted flashcard progress
      * @param typingProgress persisted typing progress
      * @return the restored vocabulary card
-     * @throws IllegalArgumentException if any text is blank
+     * @throws IllegalArgumentException if any text is blank or uses invalid characters
      * @throws NullPointerException if an argument is null
      */
     public static VocabularyCard restore(UUID id, String hiragana, String romaji,
@@ -71,17 +78,77 @@ public final class VocabularyCard {
      * @param newHiragana replacement Hiragana text
      * @param newRomaji replacement romaji pronunciation
      * @param newEnglishMeaning replacement English meaning
-     * @throws IllegalArgumentException if any text is blank
+     * @throws IllegalArgumentException if any text is blank or uses invalid characters
      * @throws NullPointerException if any text is null
      */
     void editContent(String newHiragana, String newRomaji, String newEnglishMeaning) {
+        validateContent(newHiragana, newRomaji, newEnglishMeaning);
         String normalisedHiragana = normaliseHiragana(newHiragana);
-        String trimmedRomaji = requireNonBlank(newRomaji, "Romaji");
-        String trimmedEnglishMeaning = requireNonBlank(newEnglishMeaning, "English meaning");
+        String normalisedRomaji = normaliseRomaji(newRomaji);
+        String normalisedEnglishMeaning = normaliseEnglishMeaning(newEnglishMeaning);
 
         hiragana = normalisedHiragana;
-        romaji = trimmedRomaji;
-        englishMeaning = trimmedEnglishMeaning;
+        romaji = normalisedRomaji;
+        englishMeaning = normalisedEnglishMeaning;
+    }
+
+    /**
+     * Validates every required text field before any card content is changed.
+     *
+     * @param hiragana Hiragana text to validate
+     * @param romaji romaji text to validate
+     * @param englishMeaning English meaning to validate
+     * @throws IllegalArgumentException if a field is blank or uses invalid characters
+     * @throws NullPointerException if a field is null
+     */
+    static void validateContent(String hiragana, String romaji, String englishMeaning) {
+        Objects.requireNonNull(hiragana, "Hiragana cannot be null");
+        Objects.requireNonNull(romaji, "Romaji cannot be null");
+        Objects.requireNonNull(englishMeaning, "English meaning cannot be null");
+        String normalisedHiragana = Normalizer.normalize(hiragana.strip(), Normalizer.Form.NFC);
+        String normalisedRomaji = Normalizer.normalize(romaji.strip(), Normalizer.Form.NFC);
+        String normalisedEnglishMeaning = Normalizer.normalize(englishMeaning.strip(),
+                Normalizer.Form.NFC);
+        List<String> errors = new ArrayList<>();
+        addValidationError(errors, "Hiragana", normalisedHiragana, VocabularyCard::isHiragana);
+        addValidationError(errors, "Romaji", normalisedRomaji, VocabularyCard::isLatinText);
+        addValidationError(errors, "English meaning", normalisedEnglishMeaning,
+                VocabularyCard::isLatinText);
+        if (!errors.isEmpty()) {
+            throw new IllegalArgumentException(String.join("; ", errors));
+        }
+    }
+
+    private static void addValidationError(List<String> errors, String fieldName, String value,
+            java.util.function.IntPredicate characterRule) {
+        if (value.isEmpty()) {
+            errors.add(fieldName + " cannot be blank");
+        } else if (value.codePoints().anyMatch(characterRule.negate())) {
+            errors.add(fieldName + " contains invalid characters");
+        }
+    }
+
+    private static boolean isHiragana(int codePoint) {
+        return Character.isWhitespace(codePoint)
+                || Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HIRAGANA
+                || codePoint == 0x30FC;
+    }
+
+    private static boolean isLatinText(int codePoint) {
+        return Character.isWhitespace(codePoint)
+                || Character.isDigit(codePoint)
+                || (Character.isLetter(codePoint)
+                        && Character.UnicodeScript.of(codePoint)
+                                == Character.UnicodeScript.LATIN)
+                || isCommonPunctuation(codePoint);
+    }
+
+    private static boolean isCommonPunctuation(int codePoint) {
+        return switch (codePoint) {
+            case '-', '\'', '\u2019', '.', ',', '!', '?', ':', ';', '/', '&', '(', ')', '+',
+                    '=' -> true;
+            default -> false;
+        };
     }
 
     /**
@@ -133,6 +200,15 @@ public final class VocabularyCard {
 
     static String normaliseHiragana(String value) {
         return Normalizer.normalize(requireNonBlank(value, "Hiragana"), Normalizer.Form.NFC);
+    }
+
+    static String normaliseRomaji(String value) {
+        return Normalizer.normalize(requireNonBlank(value, "Romaji"), Normalizer.Form.NFC);
+    }
+
+    static String normaliseEnglishMeaning(String value) {
+        return Normalizer.normalize(requireNonBlank(value, "English meaning"),
+                Normalizer.Form.NFC);
     }
 
     private static String requireNonBlank(String value, String fieldName) {

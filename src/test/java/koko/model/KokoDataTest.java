@@ -31,6 +31,35 @@ class KokoDataTest {
     }
 
     @Test
+    void duplicateDetectionRemainsConsistentWithCanonicalTextNormalization() {
+        KokoData data = new KokoData();
+        data.addVocabularyCard("ねこ", "neko", "café", CREATION_DATE);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                data.addVocabularyCard("ねこ", "neko2", "cafe\u0301", CREATION_DATE));
+
+        assertTrue(exception.getMessage().contains("already in the global library"));
+        assertEquals(1, data.vocabularyCards().size());
+    }
+
+    @Test
+    void editingToCanonicallyEquivalentMeaningIsRejectedAsDuplicate() {
+        KokoData data = new KokoData();
+        VocabularyCard existing = data.addVocabularyCard("ねこ", "neko", "café", CREATION_DATE);
+        VocabularyCard edited = data.addVocabularyCard("いぬ", "inu", "dog", CREATION_DATE);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                data.editVocabularyCard(edited.id(), "ねこ", "inu2", "cafe\u0301"));
+
+        assertTrue(exception.getMessage().contains("already in the global library"));
+        assertEquals("ねこ", existing.hiragana());
+        assertEquals("café", existing.englishMeaning());
+        assertEquals("いぬ", edited.hiragana());
+        assertEquals("inu", edited.romaji());
+        assertEquals("dog", edited.englishMeaning());
+    }
+
+    @Test
     void nearDuplicatesRemainDistinctWhenEitherDuplicateKeyDiffers() {
         KokoData data = new KokoData();
         VocabularyCard first = data.addVocabularyCard("ねこ", "neko", "cat", CREATION_DATE);
