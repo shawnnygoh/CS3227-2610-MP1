@@ -10,7 +10,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,6 +28,8 @@ import koko.model.KokoData;
 import koko.model.Mode;
 import koko.model.ModeProgress;
 import koko.model.VocabularyCard;
+import koko.service.KokoService;
+import koko.service.ReviewOutcome;
 
 /**
  * Tests versioned JSON persistence and safe-save behavior.
@@ -84,6 +89,38 @@ class JsonStorageTest {
         assertEquals(List.of(second.id(), first.id()), loaded.decks().get(0).cardIds());
         assertEquals(List.of(first.id()), loaded.decks().get(1).cardIds());
         assertNotEquals(first, loadedFirst);
+    }
+
+    @Test
+    void persistedFlashcardOutcomeRoundTripsThroughJsonStorage() throws StorageException {
+        Path path = temporaryDirectory.resolve("outcome.json");
+        Clock clock = Clock.fixed(Instant.parse("2026-08-29T01:00:00Z"),
+                ZoneId.of("Asia/Singapore"));
+        JsonStorage storage = new JsonStorage(path);
+        KokoService service = new KokoService(storage, clock);
+        VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
+        Deck deck = service.createDeck("Animals");
+        service.addCardToDeck(deck.id(), card.id());
+
+        service.recordFlashcardOutcome(card.id(), ReviewOutcome.CORRECT);
+
+        KokoService restoredService = new KokoService(storage, clock);
+        restoredService.load();
+        VocabularyCard restored = restoredService.data().findVocabularyCard(card.id())
+                .orElseThrow();
+        ModeProgress progress = restored.progressFor(Mode.FLASHCARD);
+        assertEquals(card.id(), restored.id());
+        assertEquals("ねこ", restored.hiragana());
+        assertEquals("neko", restored.romaji());
+        assertEquals("cat", restored.englishMeaning());
+        assertEquals(1, progress.mastery());
+        assertEquals(1, progress.attempts());
+        assertEquals(1, progress.correctAttempts());
+        assertEquals(CREATION_DATE, progress.lastReviewedDate());
+        assertEquals(CREATION_DATE.plusDays(1), progress.nextDueDate());
+        assertEquals(List.of(deck.id()), restoredService.data().decks().stream()
+                .map(Deck::id).toList());
+        assertEquals(List.of(card.id()), restoredService.data().decks().get(0).cardIds());
     }
 
     @Test

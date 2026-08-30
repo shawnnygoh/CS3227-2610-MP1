@@ -7,9 +7,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.InstantSource;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
@@ -64,7 +68,8 @@ class KokoServiceTest {
         service.removeCardFromDeck(firstDeck.id(), card.id());
         service.deleteVocabularyCard(card.id());
 
-        assertEquals(7, storage.saveCount);
+        assertEquals(7, storage.successfulSaveCount);
+        assertEquals(7, storage.saveInvocations);
     }
 
     @Test
@@ -74,7 +79,7 @@ class KokoServiceTest {
         VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
         Deck deck = service.createDeck("Basics");
         service.addCardToDeck(deck.id(), card.id());
-        int savesBeforeRejectedOperations = storage.saveCount;
+        int savesBeforeRejectedOperations = storage.successfulSaveCount;
 
         assertThrows(IllegalArgumentException.class, () ->
                 service.addVocabularyCard("ねこ", "neko2", "CAT"));
@@ -84,7 +89,7 @@ class KokoServiceTest {
         assertThrows(IllegalArgumentException.class, () ->
                 service.removeCardFromDeck(deck.id(), java.util.UUID.randomUUID()));
 
-        assertEquals(savesBeforeRejectedOperations, storage.saveCount);
+        assertEquals(savesBeforeRejectedOperations, storage.successfulSaveCount);
     }
 
     @Test
@@ -175,7 +180,8 @@ class KokoServiceTest {
 
         assertThrows(StorageException.class, () ->
                 service.addVocabularyCard("つき", "tsuki", "moon"));
-        assertEquals(0, storage.saveCount);
+        assertEquals(1, storage.saveInvocations);
+        assertEquals(0, storage.successfulSaveCount);
         assertTrue(service.data().vocabularyCards().isEmpty());
     }
 
@@ -186,11 +192,11 @@ class KokoServiceTest {
         VocabularyCard card = service.addVocabularyCard("とり", "tori", "bird");
         Deck deck = service.createDeck("Animals");
         service.addCardToDeck(deck.id(), card.id());
-        int savesBeforeDelete = storage.saveCount;
+        int savesBeforeDelete = storage.successfulSaveCount;
 
         service.deleteDeck(deck.id());
 
-        assertEquals(savesBeforeDelete + 1, storage.saveCount);
+        assertEquals(savesBeforeDelete + 1, storage.successfulSaveCount);
         assertTrue(service.data().decks().isEmpty());
         assertTrue(service.data().findVocabularyCard(card.id()).isPresent());
     }
@@ -239,14 +245,223 @@ class KokoServiceTest {
                 service.data().findDeckById(second.id()).orElseThrow().cardIds());
     }
 
+    @Test
+    void correctOutcomeUpdatesEveryFlashcardFieldAndUsesResultingMasteryInterval()
+            throws StorageException {
+        int[] expectedIntervals = {1, 3, 7, 14, 30, 30};
+
+        for (int currentMastery = 0; currentMastery <= 5; currentMastery++) {
+            FakeStorage storage = new FakeStorage();
+            KokoService service = new KokoService(storage, FIXED_CLOCK);
+            VocabularyCard card = service.addVocabularyCard("ねこ", "neko" + currentMastery,
+                    "cat" + currentMastery);
+            ModeProgress typing = new ModeProgress(2, 3, 1,
+                    CREATION_DATE.minusDays(2), CREATION_DATE.plusDays(4));
+            card.updateProgress(Mode.FLASHCARD, new ModeProgress(currentMastery, 7, 5,
+                    CREATION_DATE.minusDays(1), CREATION_DATE.minusDays(2)));
+            card.updateProgress(Mode.TYPING, typing);
+
+            service.recordFlashcardOutcome(card.id(), ReviewOutcome.CORRECT);
+
+            VocabularyCard updated = service.data().findVocabularyCard(card.id()).orElseThrow();
+            ModeProgress flashcard = updated.progressFor(Mode.FLASHCARD);
+            assertEquals(currentMastery == 5 ? 5 : currentMastery + 1, flashcard.mastery());
+            assertEquals(8, flashcard.attempts());
+            assertEquals(6, flashcard.correctAttempts());
+            assertEquals(CREATION_DATE, flashcard.lastReviewedDate());
+            assertEquals(CREATION_DATE.plusDays(expectedIntervals[currentMastery]),
+                    flashcard.nextDueDate());
+            assertProgressEquals(typing, updated.progressFor(Mode.TYPING));
+            assertEquals(card.id(), updated.id());
+            assertEquals(card.hiragana(), updated.hiragana());
+            assertEquals(card.romaji(), updated.romaji());
+            assertEquals(card.englishMeaning(), updated.englishMeaning());
+            assertEquals(2, storage.saveInvocations);
+            assertEquals(2, storage.successfulSaveCount);
+        }
+    }
+
+    @Test
+    void incorrectOutcomeLowersMasteryWithoutChangingCorrectAttempts() throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        KokoService service = new KokoService(storage, FIXED_CLOCK);
+        VocabularyCard card = service.addVocabularyCard("いぬ", "inu", "dog");
+        ModeProgress original = new ModeProgress(4, 9, 6,
+                CREATION_DATE.minusDays(3), CREATION_DATE.plusDays(20));
+        card.updateProgress(Mode.FLASHCARD, original);
+
+        service.recordFlashcardOutcome(card.id(), ReviewOutcome.INCORRECT);
+
+        ModeProgress updated = service.data().findVocabularyCard(card.id()).orElseThrow()
+                .progressFor(Mode.FLASHCARD);
+        assertEquals(3, updated.mastery());
+        assertEquals(10, updated.attempts());
+        assertEquals(6, updated.correctAttempts());
+        assertEquals(CREATION_DATE, updated.lastReviewedDate());
+        assertEquals(CREATION_DATE.plusDays(1), updated.nextDueDate());
+    }
+
+    @Test
+    void eachOutcomeUsesActualDateForDueAndNonDueCardsAcrossMidnight() throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        AtomicReference<Instant> currentInstant = new AtomicReference<>(FIXED_CLOCK.instant());
+        InstantSource timeSource = currentInstant::get;
+        KokoService service = new KokoService(storage, timeSource.withZone(FIXED_CLOCK.getZone()));
+        VocabularyCard overdue = service.addVocabularyCard("あめ", "ame", "rain");
+        VocabularyCard nonDue = service.addVocabularyCard("ゆき", "yuki", "snow");
+        overdue.updateProgress(Mode.FLASHCARD, new ModeProgress(1, 1, 1,
+                CREATION_DATE.minusDays(5), CREATION_DATE.minusDays(1)));
+        nonDue.updateProgress(Mode.FLASHCARD, new ModeProgress(1, 1, 1,
+                CREATION_DATE.minusDays(5), CREATION_DATE.plusDays(20)));
+
+        // Advance beyond creation, then cross midnight in Singapore without sleeping.
+        currentInstant.set(Instant.parse("2026-08-31T15:59:59Z"));
+        service.recordFlashcardOutcome(overdue.id(), ReviewOutcome.INCORRECT);
+        currentInstant.set(Instant.parse("2026-08-31T16:00:00Z"));
+        service.recordFlashcardOutcome(nonDue.id(), ReviewOutcome.CORRECT);
+
+        ModeProgress overdueProgress = service.data().findVocabularyCard(overdue.id()).orElseThrow()
+                .progressFor(Mode.FLASHCARD);
+        ModeProgress nonDueProgress = service.data().findVocabularyCard(nonDue.id()).orElseThrow()
+                .progressFor(Mode.FLASHCARD);
+        assertEquals(LocalDate.of(2026, 8, 31), overdueProgress.lastReviewedDate());
+        assertEquals(LocalDate.of(2026, 9, 1), overdueProgress.nextDueDate());
+        assertEquals(LocalDate.of(2026, 9, 1), nonDueProgress.lastReviewedDate());
+        assertEquals(LocalDate.of(2026, 9, 4), nonDueProgress.nextDueDate());
+    }
+
+    @Test
+    void outcomeWorksForUnassignedAndSharedCards() throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        KokoService service = new KokoService(storage, FIXED_CLOCK);
+        VocabularyCard unassigned = service.addVocabularyCard("つき", "tsuki", "moon");
+        VocabularyCard shared = service.addVocabularyCard("ほし", "hoshi", "star");
+        VocabularyCard other = service.addVocabularyCard("たいよう", "taiyou", "sun");
+        Deck first = service.createDeck("First");
+        Deck second = service.createDeck("Second");
+        service.addCardToDeck(first.id(), other.id());
+        service.addCardToDeck(first.id(), shared.id());
+        service.addCardToDeck(second.id(), shared.id());
+        service.addCardToDeck(second.id(), other.id());
+
+        service.recordFlashcardOutcome(unassigned.id(), ReviewOutcome.CORRECT);
+        service.recordFlashcardOutcome(shared.id(), ReviewOutcome.INCORRECT);
+
+        assertEquals(1, service.data().findVocabularyCard(unassigned.id()).orElseThrow()
+                .progressFor(Mode.FLASHCARD).attempts());
+        assertEquals(1, service.data().findVocabularyCard(shared.id()).orElseThrow()
+                .progressFor(Mode.FLASHCARD).attempts());
+        assertEquals(0, service.data().findVocabularyCard(other.id()).orElseThrow()
+                .progressFor(Mode.FLASHCARD).attempts());
+        assertEquals(List.of(other.id(), shared.id()), service.data().findDeckById(first.id())
+                .orElseThrow().cardIds());
+        assertEquals(List.of(shared.id(), other.id()), service.data().findDeckById(second.id())
+                .orElseThrow().cardIds());
+    }
+
+    @Test
+    void invalidOutcomeInputsDoNotSaveOrChangeProgress() throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        KokoService service = new KokoService(storage, FIXED_CLOCK);
+        VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
+        KokoData originalData = service.data();
+        ModeProgress originalProgress = card.progressFor(Mode.FLASHCARD);
+        int savesBefore = storage.saveInvocations;
+
+        assertThrows(NullPointerException.class, () ->
+                service.recordFlashcardOutcome(null, ReviewOutcome.CORRECT));
+        assertThrows(IllegalArgumentException.class, () ->
+                service.recordFlashcardOutcome(UUID.randomUUID(), ReviewOutcome.CORRECT));
+        assertThrows(NullPointerException.class, () ->
+                service.recordFlashcardOutcome(card.id(), null));
+        assertThrows(IllegalArgumentException.class, () ->
+                service.recordFlashcardOutcome(card.id(), ReviewOutcome.SKIPPED));
+
+        assertSame(originalData, service.data());
+        assertSame(originalProgress, card.progressFor(Mode.FLASHCARD));
+        assertEquals(savesBefore, storage.saveInvocations);
+    }
+
+    @Test
+    void schedulerFailureLeavesServiceDataAndExposedReferencesUnchanged() throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        KokoService service = new KokoService(storage, FIXED_CLOCK);
+        VocabularyCard card = service.addVocabularyCard("くも", "kumo", "cloud");
+        ModeProgress original = new ModeProgress(0, Integer.MAX_VALUE, 0,
+                CREATION_DATE.minusDays(1), CREATION_DATE);
+        card.updateProgress(Mode.FLASHCARD, original);
+        KokoData originalData = service.data();
+
+        assertThrows(IllegalArgumentException.class, () ->
+                service.recordFlashcardOutcome(card.id(), ReviewOutcome.INCORRECT));
+
+        assertSame(originalData, service.data());
+        assertSame(card, service.data().findVocabularyCard(card.id()).orElseThrow());
+        assertSame(original, card.progressFor(Mode.FLASHCARD));
+        assertEquals(Integer.MAX_VALUE, original.attempts());
+        assertEquals(1, storage.saveInvocations);
+    }
+
+    @Test
+    void failedOutcomeSaveLeavesCurrentDataAndRetainedReferencesUnchanged()
+            throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        KokoService service = new KokoService(storage, FIXED_CLOCK);
+        VocabularyCard card = service.addVocabularyCard("おちゃ", "ocha", "tea");
+        Deck deck = service.createDeck("Drinks");
+        service.addCardToDeck(deck.id(), card.id());
+        KokoData originalData = service.data();
+        VocabularyCard originalCard = card;
+        ModeProgress originalFlashcard = card.progressFor(Mode.FLASHCARD);
+        ModeProgress originalTyping = card.progressFor(Mode.TYPING);
+        storage.failSaves = true;
+
+        assertThrows(StorageException.class, () ->
+                service.recordFlashcardOutcome(card.id(), ReviewOutcome.CORRECT));
+
+        assertSame(originalData, service.data());
+        assertSame(originalCard, service.data().findVocabularyCard(card.id()).orElseThrow());
+        assertSame(originalFlashcard, originalCard.progressFor(Mode.FLASHCARD));
+        assertSame(originalTyping, originalCard.progressFor(Mode.TYPING));
+        assertEquals(List.of(card.id()), deck.cardIds());
+        assertEquals(4, storage.saveInvocations);
+        assertEquals(3, storage.successfulSaveCount);
+    }
+
+    @Test
+    void failedOutcomeCanBeRetriedFromUnchangedProgress() throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        KokoService service = new KokoService(storage, FIXED_CLOCK);
+        VocabularyCard card = service.addVocabularyCard("はな", "hana", "flower");
+        ModeProgress original = card.progressFor(Mode.FLASHCARD);
+        storage.failNextSave = true;
+
+        assertThrows(StorageException.class, () ->
+                service.recordFlashcardOutcome(card.id(), ReviewOutcome.CORRECT));
+        assertSame(original, card.progressFor(Mode.FLASHCARD));
+
+        service.recordFlashcardOutcome(card.id(), ReviewOutcome.CORRECT);
+
+        ModeProgress updated = service.data().findVocabularyCard(card.id()).orElseThrow()
+                .progressFor(Mode.FLASHCARD);
+        assertEquals(1, updated.mastery());
+        assertEquals(1, updated.attempts());
+        assertEquals(1, updated.correctAttempts());
+        assertEquals(3, storage.saveInvocations);
+        assertEquals(2, storage.successfulSaveCount);
+    }
+
     /**
-     * Small deterministic storage double used to count save calls.
+     * Small deterministic storage double that stores detached snapshots and
+     * counts attempted and successful saves separately.
      */
     private static final class FakeStorage implements Storage {
 
         private KokoData loadedData = new KokoData();
-        private int saveCount;
+        private int saveInvocations;
+        private int successfulSaveCount;
         private boolean failSaves;
+        private boolean failNextSave;
 
         @Override
         public KokoData load() {
@@ -255,11 +470,39 @@ class KokoServiceTest {
 
         @Override
         public void save(KokoData data) throws StorageException {
-            if (failSaves) {
+            saveInvocations++;
+            if (failSaves || failNextSave) {
+                failNextSave = false;
                 throw new StorageException("forced save failure", null);
             }
-            saveCount++;
-            loadedData = data;
+            successfulSaveCount++;
+            loadedData = copyOf(data);
         }
+
+        private static KokoData copyOf(KokoData source) {
+            List<VocabularyCard> cards = new ArrayList<>();
+            for (VocabularyCard card : source.vocabularyCards()) {
+                cards.add(VocabularyCard.restore(card.id(), card.hiragana(), card.romaji(),
+                        card.englishMeaning(), copyProgress(card.progressFor(Mode.FLASHCARD)),
+                        copyProgress(card.progressFor(Mode.TYPING))));
+            }
+            List<Deck> decks = source.decks().stream()
+                    .map(deck -> Deck.restore(deck.id(), deck.name(), deck.cardIds()))
+                    .toList();
+            return KokoData.restore(cards, decks);
+        }
+
+        private static ModeProgress copyProgress(ModeProgress progress) {
+            return new ModeProgress(progress.mastery(), progress.attempts(),
+                    progress.correctAttempts(), progress.lastReviewedDate(), progress.nextDueDate());
+        }
+    }
+
+    private static void assertProgressEquals(ModeProgress expected, ModeProgress actual) {
+        assertEquals(expected.mastery(), actual.mastery());
+        assertEquals(expected.attempts(), actual.attempts());
+        assertEquals(expected.correctAttempts(), actual.correctAttempts());
+        assertEquals(expected.lastReviewedDate(), actual.lastReviewedDate());
+        assertEquals(expected.nextDueDate(), actual.nextDueDate());
     }
 }

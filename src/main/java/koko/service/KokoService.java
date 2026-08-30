@@ -192,6 +192,40 @@ public final class KokoService {
         });
     }
 
+    /**
+     * Records one flashcard review outcome and persists the resulting progress.
+     *
+     * <p>The review is allowed for any globally stored card, regardless of deck
+     * membership or due status. The date is sampled from the injected clock for
+     * this submission.
+     *
+     * @param cardId global card whose flashcard progress is reviewed.
+     * @param outcome correct or incorrect review result.
+     * @throws IllegalArgumentException if the card is unknown, outcome is skipped,
+     *         or incrementing the attempt count exceeds the supported integer range.
+     * @throws NullPointerException if cardId or outcome is null.
+     * @throws java.time.DateTimeException if the next due date exceeds the range supported by {@link LocalDate}.
+     * @throws StorageException if persistence fails.
+     */
+    public void recordFlashcardOutcome(UUID cardId, ReviewOutcome outcome)
+            throws StorageException {
+        Objects.requireNonNull(cardId, "Card ID cannot be null");
+        Objects.requireNonNull(outcome, "Review outcome cannot be null");
+        if (outcome == ReviewOutcome.SKIPPED) {
+            throw new IllegalArgumentException("Skipped outcomes are not recorded");
+        }
+
+        LocalDate reviewDate = LocalDate.now(clock);
+        KokoData candidate = copyOf(data);
+        VocabularyCard card = candidate.findVocabularyCard(cardId)
+                .orElseThrow(() -> new IllegalArgumentException("Vocabulary card does not exist"));
+        ModeProgress scheduled = new MasteryScheduler().schedule(
+                card.progressFor(Mode.FLASHCARD), outcome, reviewDate);
+        card.updateProgress(Mode.FLASHCARD, scheduled);
+        storage.save(candidate);
+        data = candidate;
+    }
+
     private <T> T mutate(Function<KokoData, T> operation) throws StorageException {
         KokoData original = copyOf(data);
         try {
