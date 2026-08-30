@@ -302,6 +302,52 @@ class KokoServiceTest {
     }
 
     @Test
+    void typingOutcomeUpdatesOnlyTypingProgressAndAcceptsSkipped() throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        KokoService service = new KokoService(storage, FIXED_CLOCK);
+        VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
+        ModeProgress flashcard = new ModeProgress(4, 7, 5,
+                CREATION_DATE.minusDays(1), CREATION_DATE.plusDays(5));
+        ModeProgress typing = new ModeProgress(2, 3, 1,
+                CREATION_DATE.minusDays(2), CREATION_DATE.plusDays(4));
+        card.updateProgress(Mode.FLASHCARD, flashcard);
+        card.updateProgress(Mode.TYPING, typing);
+
+        service.recordTypingOutcome(card.id(), ReviewOutcome.SKIPPED);
+
+        VocabularyCard updated = service.data().findVocabularyCard(card.id()).orElseThrow();
+        assertProgressEquals(flashcard, updated.progressFor(Mode.FLASHCARD));
+        assertProgressEquals(new ModeProgress(2, 4, 1, CREATION_DATE,
+                CREATION_DATE.plusDays(1)), updated.progressFor(Mode.TYPING));
+        assertEquals(card.id(), updated.id());
+        assertEquals("ねこ", updated.hiragana());
+        assertEquals("neko", updated.romaji());
+        assertEquals("cat", updated.englishMeaning());
+        assertEquals(2, storage.saveInvocations);
+    }
+
+    @Test
+    void invalidTypingOutcomeInputsDoNotSaveOrChangeProgress() throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        KokoService service = new KokoService(storage, FIXED_CLOCK);
+        VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
+        KokoData originalData = service.data();
+        ModeProgress originalProgress = card.progressFor(Mode.TYPING);
+        int savesBefore = storage.saveInvocations;
+
+        assertThrows(NullPointerException.class, () ->
+                service.recordTypingOutcome(null, ReviewOutcome.CORRECT));
+        assertThrows(IllegalArgumentException.class, () ->
+                service.recordTypingOutcome(UUID.randomUUID(), ReviewOutcome.CORRECT));
+        assertThrows(NullPointerException.class, () ->
+                service.recordTypingOutcome(card.id(), null));
+
+        assertSame(originalData, service.data());
+        assertSame(originalProgress, card.progressFor(Mode.TYPING));
+        assertEquals(savesBefore, storage.saveInvocations);
+    }
+
+    @Test
     void eachOutcomeUsesActualDateForDueAndNonDueCardsAcrossMidnight() throws StorageException {
         FakeStorage storage = new FakeStorage();
         AtomicReference<Instant> currentInstant = new AtomicReference<>(FIXED_CLOCK.instant());
