@@ -18,6 +18,11 @@ public interface Storage {
     /**
      * Saves the complete application state.
      *
+     * <p>If saving fails, previously persisted data remains unchanged, or absent
+     * if nothing was saved before. Callers must not publish the supplied state
+     * when this method throws. This contract does not promise power-loss
+     * durability or protection from concurrent writers.
+     *
      * @param data state to save.
      * @throws StorageException if serialization or replacement fails.
      */

@@ -3,6 +3,7 @@ package koko.storage;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -32,7 +33,33 @@ import koko.model.ModeProgress;
 import koko.model.VocabularyCard;
 
 /**
+ * Moves one path to another using the requested file-system options.
+ *
+ * <p>The package-private seam lets storage tests inject deterministic move
+ * failures. Production storage uses {@link Files#move(Path, Path, CopyOption...)}.
+ */
+@FunctionalInterface
+interface MoveOperation {
+
+    /**
+     * Moves a source path to a target path.
+     *
+     * @param source path to move.
+     * @param target replacement path.
+     * @param options move options.
+     * @return the target path.
+     * @throws IOException if the move cannot be completed.
+     */
+    Path move(Path source, Path target, CopyOption... options) throws IOException;
+}
+
+/**
  * Versioned JSON storage for Koko's global cards and ordered decks.
+ *
+ * <p>Each save serializes to a sibling temporary file and atomically replaces
+ * the target. Unsupported atomic replacement is a controlled save error and
+ * is not retried with a non-atomic move. This policy does not promise
+ * power-loss durability or protection from concurrent writers.
  */
 public final class JsonStorage implements Storage {
 
@@ -40,6 +67,7 @@ public final class JsonStorage implements Storage {
     private static final Path DEFAULT_PATH = Path.of("data", "koko-data.json");
     private final Path path;
     private final ObjectMapper mapper;
+    private final MoveOperation moveOperation;
 
     /**
      * Creates storage using Koko's default data path.
@@ -59,8 +87,21 @@ public final class JsonStorage implements Storage {
     }
 
     JsonStorage(Path path, ObjectMapper mapper) {
+        this(path, mapper, Files::move);
+    }
+
+    /**
+     * Creates storage with injectable serialization and move operations for failure tests.
+     *
+     * @param path JSON file path.
+     * @param mapper mapper used to serialize and restore storage documents.
+     * @param moveOperation operation that honors the requested atomic move options.
+     * @throws NullPointerException if an argument is null.
+     */
+    JsonStorage(Path path, ObjectMapper mapper, MoveOperation moveOperation) {
         this.path = Objects.requireNonNull(path, "Storage path cannot be null").toAbsolutePath();
         this.mapper = Objects.requireNonNull(mapper, "JSON mapper cannot be null");
+        this.moveOperation = Objects.requireNonNull(moveOperation, "Move operation cannot be null");
     }
 
     @Override
@@ -77,6 +118,18 @@ public final class JsonStorage implements Storage {
         }
     }
 
+    /**
+     * Saves through a sibling temporary file and atomic replacement.
+     *
+     * <p>If atomic replacement is unsupported, the failure is reported without
+     * a non-atomic fallback, so the existing target remains the persisted
+     * version. Temporary-file cleanup is best effort.
+     *
+     * @param data state to save.
+     * @throws NullPointerException if data is null.
+     * @throws StorageException if serialization, temporary-file creation, or
+     *         atomic replacement fails.
+     */
     @Override
     public void save(KokoData data) throws StorageException {
         Objects.requireNonNull(data, "Data cannot be null");
@@ -93,6 +146,10 @@ public final class JsonStorage implements Storage {
             Files.writeString(temporaryPath, json, StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
             replaceTarget(temporaryPath);
+        } catch (AtomicMoveNotSupportedException exception) {
+            throw new StorageException(
+                    "Could not save Koko data because atomic replacement is not supported",
+                    exception);
         } catch (IOException | SecurityException exception) {
             throw new StorageException("Could not safely save Koko data", exception);
         } finally {
@@ -104,13 +161,16 @@ public final class JsonStorage implements Storage {
         }
     }
 
+    /**
+     * Replaces the target with a temporary file using only an atomic move.
+     *
+     * @param temporaryPath sibling temporary file containing the serialized state.
+     * @throws AtomicMoveNotSupportedException if the file system does not support atomic moves.
+     * @throws IOException if the atomic replacement fails for another reason.
+     */
     private void replaceTarget(Path temporaryPath) throws IOException {
-        try {
-            Files.move(temporaryPath, path, StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(temporaryPath, path, StandardCopyOption.REPLACE_EXISTING);
-        }
+        moveOperation.move(temporaryPath, path, StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING);
     }
 
     private static ObjectMapper createMapper() {

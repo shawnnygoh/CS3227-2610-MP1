@@ -3,13 +3,17 @@ package koko.storage;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -146,6 +150,31 @@ class JsonStorageTest {
     }
 
     @Test
+    void initialSaveAndSuccessfulReplacementCanBeReloaded() throws StorageException {
+        Path path = temporaryDirectory.resolve("replacement.json");
+        JsonStorage storage = new JsonStorage(path);
+        KokoData initial = new KokoData();
+        initial.addVocabularyCard("ねこ", "neko", "cat", CREATION_DATE);
+        KokoData replacement = new KokoData();
+        VocabularyCard replacementCard = replacement.addVocabularyCard("いぬ", "inu", "dog",
+                CREATION_DATE);
+        Deck replacementDeck = replacement.createDeck("Animals");
+        replacement.addCardToDeck(replacementDeck.id(), replacementCard.id());
+
+        storage.save(initial);
+        assertEquals(List.of(initial.vocabularyCards().getFirst().id()), storage.load().vocabularyCards().stream()
+                .map(VocabularyCard::id).toList());
+        storage.save(replacement);
+
+        KokoData loaded = storage.load();
+        assertEquals(List.of(replacementCard.id()), loaded.vocabularyCards().stream()
+                .map(VocabularyCard::id).toList());
+        assertEquals(List.of(replacementDeck.id()), loaded.decks().stream()
+                .map(Deck::id).toList());
+        assertEquals(List.of(replacementCard.id()), loaded.decks().get(0).cardIds());
+    }
+
+    @Test
     void malformedJsonIsRejectedAsStorageError() throws IOException {
         Path path = writeDocument("{\"schemaVersion\":1");
 
@@ -279,6 +308,126 @@ class JsonStorageTest {
     }
 
     @Test
+    void unsupportedAtomicReplacementDoesNotFallbackOrChangeExistingFile()
+            throws IOException, StorageException {
+        Path path = temporaryDirectory.resolve("atomic-unsupported.json");
+        JsonStorage initialStorage = new JsonStorage(path);
+        initialStorage.save(new KokoData());
+        byte[] originalBytes = Files.readAllBytes(path);
+        AtomicMoveNotSupportedException unsupported = new AtomicMoveNotSupportedException(
+                "temporary", path.toString(), "forced test failure");
+        MoveFailure moveFailure = new MoveFailure(unsupported);
+        JsonStorage storage = new JsonStorage(path, new ObjectMapper(), moveFailure);
+        KokoData replacement = new KokoData();
+        VocabularyCard card = replacement.addVocabularyCard("ねこ", "neko", "cat", CREATION_DATE);
+
+        StorageException failure = assertThrows(StorageException.class, () ->
+                storage.save(replacement));
+
+        assertTrue(failure.getMessage().contains("atomic replacement is not supported"));
+        assertSame(unsupported, failure.getCause());
+        assertEquals(1, moveFailure.invocationCount);
+        assertArrayEquals(originalBytes, Files.readAllBytes(path));
+        assertTrue(storage.load().vocabularyCards().isEmpty());
+        assertTrue(storage.load().decks().isEmpty());
+        assertNoTemporaryFile(path);
+
+        moveFailure.failMoves = false;
+        storage.save(replacement);
+
+        assertEquals(List.of(card.id()), storage.load().vocabularyCards().stream()
+                .map(VocabularyCard::id).toList());
+        assertEquals(2, moveFailure.invocationCount);
+        assertNoTemporaryFile(path);
+    }
+
+    @Test
+    void replacementIoFailurePreservesTargetCleansUpAndCanBeRetried()
+            throws IOException, StorageException {
+        Path path = temporaryDirectory.resolve("replacement-failure.json");
+        JsonStorage initialStorage = new JsonStorage(path);
+        KokoData initial = new KokoData();
+        initial.addVocabularyCard("ねこ", "neko", "cat", CREATION_DATE);
+        initialStorage.save(initial);
+        byte[] originalBytes = Files.readAllBytes(path);
+        MoveFailure moveFailure = new MoveFailure(new IOException("forced test failure"));
+        JsonStorage storage = new JsonStorage(path, new ObjectMapper(), moveFailure);
+        KokoData replacement = new KokoData();
+        replacement.addVocabularyCard("いぬ", "inu", "dog", CREATION_DATE);
+
+        StorageException failure = assertThrows(StorageException.class, () ->
+                storage.save(replacement));
+
+        assertSame(moveFailure.failure, failure.getCause());
+        assertEquals(1, moveFailure.invocationCount);
+        assertArrayEquals(originalBytes, Files.readAllBytes(path));
+        assertEquals("ねこ", storage.load().vocabularyCards().get(0).hiragana());
+        assertNoTemporaryFile(path);
+
+        moveFailure.failMoves = false;
+        storage.save(replacement);
+
+        assertEquals("いぬ", storage.load().vocabularyCards().get(0).hiragana());
+        assertEquals(2, moveFailure.invocationCount);
+        assertNoTemporaryFile(path);
+    }
+
+    @Test
+    void failedReplacementLeavesAbsentTargetAbsent() throws IOException, StorageException {
+        Path path = temporaryDirectory.resolve("absent-target.json");
+        MoveFailure moveFailure = new MoveFailure(new AtomicMoveNotSupportedException(
+                "temporary", path.toString(), "forced test failure"));
+        JsonStorage storage = new JsonStorage(path, new ObjectMapper(), moveFailure);
+
+        assertThrows(StorageException.class, () -> storage.save(new KokoData()));
+
+        assertTrue(Files.notExists(path));
+        assertNoTemporaryFile(path);
+    }
+
+    @Test
+    void failedImportAtReplacementPublishesNothingAndRetryCreatesOneDeck()
+            throws Exception {
+        Path path = temporaryDirectory.resolve("import-replacement-failure.json");
+        new JsonStorage(path).save(new KokoData());
+        byte[] originalBytes = Files.readAllBytes(path);
+        MoveFailure moveFailure = new MoveFailure(new IOException("forced test failure"));
+        JsonStorage storage = new JsonStorage(path, new ObjectMapper(), moveFailure);
+        Clock clock = Clock.fixed(Instant.parse("2026-08-29T01:00:00Z"), ZoneId.of("Asia/Singapore"));
+        KokoService service = new KokoService(storage, clock);
+        service.load();
+        KokoData originalData = service.data();
+        Path source = writeDocument("{\"schemaVersion\":1,\"deckName\":\"Imported\","
+                + "\"cards\":[{\"hiragana\":\"ねこ\",\"romaji\":\"neko\","
+                + "\"englishMeaning\":\"cat\"}]}");
+
+        assertThrows(StorageException.class, () -> service.importDeck(source));
+
+        assertSame(originalData, service.data());
+        assertTrue(service.data().decks().isEmpty());
+        assertTrue(service.data().vocabularyCards().isEmpty());
+        assertArrayEquals(originalBytes, Files.readAllBytes(path));
+        assertEquals(1, moveFailure.invocationCount);
+        assertNoTemporaryFile(path);
+
+        moveFailure.failMoves = false;
+        Deck imported = service.importDeck(source);
+
+        assertEquals(1, service.data().decks().size());
+        assertSame(imported, service.data().findDeckById(imported.id()).orElseThrow());
+        assertEquals(1, imported.cardIds().size());
+        assertEquals(imported.cardIds(), service.data().vocabularyCards().stream()
+                .map(VocabularyCard::id).toList());
+        assertEquals(2, moveFailure.invocationCount);
+        KokoData reloaded = storage.load();
+        assertEquals(List.of(imported.id()), reloaded.decks().stream().map(Deck::id).toList());
+        assertEquals(imported.cardIds(), reloaded.decks().getFirst().cardIds());
+        assertEquals(imported.cardIds(), reloaded.vocabularyCards().stream()
+                .map(VocabularyCard::id).toList());
+        assertNoTemporaryFile(path);
+    }
+
+    @Test
     void duplicateJsonPropertiesAreRejected() throws IOException {
         Path path = writeDocument("{\"schemaVersion\":1,\"schemaVersion\":1,"
                 + "\"cards\":[],\"decks\":[]}");
@@ -328,5 +477,35 @@ class JsonStorageTest {
         assertEquals(expected.correctAttempts(), actual.correctAttempts());
         assertEquals(expected.lastReviewedDate(), actual.lastReviewedDate());
         assertEquals(expected.nextDueDate(), actual.nextDueDate());
+    }
+
+    private static void assertNoTemporaryFile(Path target) throws IOException {
+        String prefix = target.getFileName() + ".tmp-";
+        try (var files = Files.list(target.getParent())) {
+            assertTrue(files.noneMatch(file -> file.getFileName().toString().startsWith(prefix)));
+        }
+    }
+
+    /** Deterministic move seam double that can fail before replacement. */
+    private static final class MoveFailure implements MoveOperation {
+
+        private final IOException failure;
+        private int invocationCount;
+        private boolean failMoves = true;
+
+        private MoveFailure(IOException failure) {
+            this.failure = failure;
+        }
+
+        @Override
+        public Path move(Path source, Path target, CopyOption... options) throws IOException {
+            invocationCount++;
+            assertEquals(List.of(StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING),
+                    List.of(options));
+            if (failMoves) {
+                throw failure;
+            }
+            return Files.move(source, target, options);
+        }
     }
 }
