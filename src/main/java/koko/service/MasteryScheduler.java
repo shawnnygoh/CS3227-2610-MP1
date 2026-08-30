@@ -34,7 +34,7 @@ public final class MasteryScheduler implements ReviewScheduler {
      * @param reviewDate actual date on which the review occurred.
      * @return a new immutable progress object.
      * @throws NullPointerException if an argument is null.
-     * @throws IllegalArgumentException if incrementing the attempt count exceeds the supported integer range.
+     * @throws IllegalArgumentException if the attempt count is already at {@link Integer#MAX_VALUE}.
      * @throws java.time.DateTimeException if the next due date exceeds the range supported by {@link LocalDate}.
      */
     @Override
@@ -44,8 +44,13 @@ public final class MasteryScheduler implements ReviewScheduler {
         Objects.requireNonNull(outcome, "Review outcome cannot be null");
         Objects.requireNonNull(reviewDate, "Review date cannot be null");
 
+        if (progress.attempts() == Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Attempt count cannot exceed " + Integer.MAX_VALUE);
+        }
+
         int mastery = computeMasteryAfter(progress.mastery(), outcome);
         int attempts = progress.attempts() + 1;
+        // ModeProgress ensures correctAttempts <= attempts, so this increment is also safe.
         int correctAttempts = progress.correctAttempts()
                 + (outcome == ReviewOutcome.CORRECT ? 1 : 0);
         LocalDate nextDueDate = reviewDate.plusDays(computeDaysUntilNextReview(mastery, outcome));

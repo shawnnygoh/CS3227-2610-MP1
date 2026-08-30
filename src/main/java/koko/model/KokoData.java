@@ -263,13 +263,4 @@ public final class KokoData {
         return findDeckById(deckId)
                 .orElseThrow(() -> new IllegalArgumentException("Deck does not exist"));
     }
-
-    private static String requireNonBlank(String value, String fieldName) {
-        Objects.requireNonNull(value, fieldName + " cannot be null");
-        String trimmed = value.strip();
-        if (trimmed.isEmpty()) {
-            throw new IllegalArgumentException(fieldName + " cannot be blank");
-        }
-        return trimmed;
-    }
 }

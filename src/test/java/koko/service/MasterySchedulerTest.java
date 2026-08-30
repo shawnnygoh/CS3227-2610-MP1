@@ -186,6 +186,42 @@ class MasterySchedulerTest {
 
     @ParameterizedTest
     @EnumSource(ReviewOutcome.class)
+    void attemptLimitIsRejectedWithAnInformativeMessage(ReviewOutcome outcome) {
+        ModeProgress original = createProgressAt(3, Integer.MAX_VALUE, Integer.MAX_VALUE);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                scheduler.schedule(original, outcome, REVIEW_DATE));
+
+        assertTrue(exception.getMessage().contains("Attempt count cannot exceed"));
+        assertTrue(exception.getMessage().contains(Integer.toString(Integer.MAX_VALUE)));
+        assertEquals(3, original.mastery());
+        assertEquals(Integer.MAX_VALUE, original.attempts());
+        assertEquals(Integer.MAX_VALUE, original.correctAttempts());
+        assertEquals(REVIEW_DATE.minusDays(1), original.lastReviewedDate());
+        assertEquals(REVIEW_DATE, original.nextDueDate());
+    }
+
+    @ParameterizedTest
+    @EnumSource(ReviewOutcome.class)
+    void oneAttemptBelowTheLimitCanAdvanceToTheLimit(ReviewOutcome outcome) {
+        ModeProgress original = createProgressAt(3, Integer.MAX_VALUE - 1, Integer.MAX_VALUE - 1);
+
+        ModeProgress scheduled = scheduler.schedule(original, outcome, REVIEW_DATE);
+
+        assertEquals(Integer.MAX_VALUE, scheduled.attempts());
+        assertEquals(outcome == ReviewOutcome.CORRECT ? Integer.MAX_VALUE : Integer.MAX_VALUE - 1,
+                scheduled.correctAttempts());
+        assertEquals(REVIEW_DATE, scheduled.lastReviewedDate());
+        assertNotSame(original, scheduled);
+        assertEquals(3, original.mastery());
+        assertEquals(Integer.MAX_VALUE - 1, original.attempts());
+        assertEquals(Integer.MAX_VALUE - 1, original.correctAttempts());
+        assertEquals(REVIEW_DATE.minusDays(1), original.lastReviewedDate());
+        assertEquals(REVIEW_DATE, original.nextDueDate());
+    }
+
+    @ParameterizedTest
+    @EnumSource(ReviewOutcome.class)
     void schedulingDoesNotMutateTheInputProgress(ReviewOutcome outcome) {
         ModeProgress original = new ModeProgress(3, 4, 2,
                 REVIEW_DATE.minusDays(2), REVIEW_DATE.minusDays(1));

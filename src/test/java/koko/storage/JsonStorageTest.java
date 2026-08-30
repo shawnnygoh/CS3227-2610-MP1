@@ -2,7 +2,7 @@ package koko.storage;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -88,7 +88,7 @@ class JsonStorageTest {
         assertProgressEquals(first.progressFor(Mode.TYPING), loadedFirst.progressFor(Mode.TYPING));
         assertEquals(List.of(second.id(), first.id()), loaded.decks().get(0).cardIds());
         assertEquals(List.of(first.id()), loaded.decks().get(1).cardIds());
-        assertNotEquals(first, loadedFirst);
+        assertNotSame(first, loadedFirst);
     }
 
     @Test

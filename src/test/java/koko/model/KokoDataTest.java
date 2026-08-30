@@ -208,7 +208,7 @@ class KokoDataTest {
 
         assertEquals("neko2", first.romaji());
         assertEquals("animal", first.englishMeaning());
-        assertEquals(progress, first.progressFor(Mode.FLASHCARD));
+        assertSame(progress, first.progressFor(Mode.FLASHCARD));
     }
 
     @Test
