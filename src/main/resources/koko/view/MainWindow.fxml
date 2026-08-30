@@ -1,13 +1,98 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.SplitPane?>
 <?import javafx.scene.layout.BorderPane?>
-<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
 
-<BorderPane xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1">
+<BorderPane fx:controller="koko.controller.MainController"
+        xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1"
+        styleClass="app-shell">
+    <top>
+        <VBox styleClass="header" spacing="4">
+            <BorderPane>
+                <left>
+                    <Label text="Koko" styleClass="app-title" />
+                </left>
+                <right>
+                    <Button text="Help" onAction="#showHelp" styleClass="secondary-button"
+                            mnemonicParsing="true" />
+                </right>
+            </BorderPane>
+            <Label text="Build a reusable Japanese vocabulary library and organise it into decks."
+                   styleClass="subtitle" wrapText="true" />
+        </VBox>
+    </top>
     <center>
-        <StackPane styleClass="empty-state-container">
-            <Label text="No vocabulary yet" styleClass="empty-state" />
-        </StackPane>
+        <SplitPane dividerPositions="0.48" styleClass="management-split">
+            <items>
+                <VBox styleClass="panel" spacing="10" VBox.vgrow="ALWAYS">
+                    <HBox alignment="CENTER_LEFT" spacing="8">
+                        <Label text="Global vocabulary" styleClass="section-title" HBox.hgrow="ALWAYS" />
+                        <Label text="Reusable across decks" styleClass="section-hint" />
+                    </HBox>
+                    <Label fx:id="vocabularyEmptyState"
+                           text="No vocabulary yet. Add your first Japanese word."
+                           styleClass="empty-state" wrapText="true" />
+                    <ListView fx:id="vocabularyList" VBox.vgrow="ALWAYS"
+                              accessibleText="Global vocabulary cards" />
+                    <HBox spacing="8">
+                        <Button fx:id="addCardButton" text="Add card" onAction="#addCard"
+                                styleClass="primary-button" mnemonicParsing="true" />
+                        <Button fx:id="editCardButton" text="Edit" onAction="#editCard"
+                                styleClass="secondary-button" mnemonicParsing="true" />
+                        <Button fx:id="deleteCardButton" text="Delete" onAction="#deleteCard"
+                                styleClass="danger-button" mnemonicParsing="true" />
+                    </HBox>
+                </VBox>
+                <VBox styleClass="panel" spacing="10" VBox.vgrow="ALWAYS">
+                    <VBox styleClass="deck-selector" spacing="8" minHeight="180" prefHeight="180"
+                          VBox.vgrow="NEVER">
+                        <HBox alignment="CENTER_LEFT" spacing="8">
+                            <Label text="Deck selection" styleClass="section-title" HBox.hgrow="ALWAYS" />
+                            <Button fx:id="createDeckButton" text="New deck" onAction="#createDeck"
+                                    styleClass="primary-button" mnemonicParsing="true" />
+                        </HBox>
+                        <Label fx:id="deckEmptyState"
+                               text="No decks yet. Create one to group your cards."
+                               styleClass="empty-state" wrapText="true" />
+                        <ListView fx:id="deckList" minHeight="60" prefHeight="75"
+                                  VBox.vgrow="ALWAYS" accessibleText="Study decks" />
+                        <HBox spacing="8">
+                            <Button fx:id="openDeckButton" text="Open" onAction="#openDeck"
+                                    styleClass="secondary-button" mnemonicParsing="true" />
+                            <Button fx:id="renameDeckButton" text="Rename" onAction="#renameDeck"
+                                    styleClass="secondary-button" mnemonicParsing="true" />
+                            <Button fx:id="deleteDeckButton" text="Delete deck" onAction="#deleteDeck"
+                                    styleClass="danger-button" mnemonicParsing="true" />
+                        </HBox>
+                    </VBox>
+                    <Separator />
+                    <Label fx:id="selectedDeckLabel" text="Select a deck to see its cards"
+                           styleClass="subsection-title" wrapText="true" />
+                    <ListView fx:id="deckCardList" minHeight="80" VBox.vgrow="ALWAYS"
+                              accessibleText="Cards in selected deck" />
+                    <HBox spacing="8">
+                        <Button fx:id="addToDeckButton" text="Add existing card" onAction="#addCardToDeck"
+                                styleClass="primary-button" mnemonicParsing="true" />
+                        <Button fx:id="removeFromDeckButton" text="Remove card from deck"
+                                onAction="#removeCardFromDeck" styleClass="secondary-button"
+                                mnemonicParsing="true" />
+                    </HBox>
+                </VBox>
+            </items>
+        </SplitPane>
     </center>
+    <bottom>
+        <VBox styleClass="guidance" spacing="4">
+            <Label text="Sensei" styleClass="guidance-title" />
+            <Label fx:id="guidanceLabel"
+                   text="Start by adding a global vocabulary card, then create a deck to reuse it."
+                   styleClass="guidance-text" wrapText="true" />
+        </VBox>
+    </bottom>
 </BorderPane>
