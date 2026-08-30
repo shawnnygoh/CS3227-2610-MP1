@@ -51,8 +51,8 @@ public final class JsonStorage implements Storage {
     /**
      * Creates storage using a caller-provided path, which is useful for tests.
      *
-     * @param path JSON file path
-     * @throws NullPointerException if path is null
+     * @param path JSON file path.
+     * @throws NullPointerException if path is null.
      */
     public JsonStorage(Path path) {
         this(path, createMapper());

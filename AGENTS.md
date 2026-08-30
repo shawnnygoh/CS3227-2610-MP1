@@ -28,6 +28,7 @@ Unless the user says otherwise, assume that you are assisting a student working 
 
 * Use American spelling in documentation, comments, Javadocs, user-facing messages, and project identifiers.
 * Separate paragraphs with a blank Javadoc line. Start each paragraph after the first with `<p>` immediately before its first word. Omit closing `</p>` tags in prose paragraphs.
+* End every Javadoc summary and each `@param`, `@return`, and `@throws` description with a period, including descriptions that span multiple lines.
 * Use one `@throws` entry per exception and explain when it occurs. Declare checked exceptions that escape a method; do not add unchecked exceptions to method declarations.
 
 ## Java version:

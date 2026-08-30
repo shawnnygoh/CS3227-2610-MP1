@@ -70,8 +70,8 @@ public final class MainController {
     /**
      * Creates a controller for the already-created application service.
      *
-     * @param service service used by this scene
-     * @param startupError controlled load error, or null when startup loaded normally
+     * @param service service used by this scene.
+     * @param startupError controlled load error, or null when startup loaded normally.
      */
     public MainController(KokoService service, String startupError) {
         this.service = service;

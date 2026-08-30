@@ -26,11 +26,11 @@ public final class KokoData {
     /**
      * Restores a complete data set while reapplying every collection and reference invariant.
      *
-     * @param restoredCards ordered globally stored cards
-     * @param restoredDecks ordered decks
-     * @return a validated restored data set
-     * @throws IllegalArgumentException if identities, content, names, or references are invalid
-     * @throws NullPointerException if a collection or element is null
+     * @param restoredCards ordered globally stored cards.
+     * @param restoredDecks ordered decks.
+     * @return a validated restored data set.
+     * @throws IllegalArgumentException if identities, content, names, or references are invalid.
+     * @throws NullPointerException if a collection or element is null.
      */
     public static KokoData restore(List<VocabularyCard> restoredCards,
             List<Deck> restoredDecks) {
@@ -69,13 +69,13 @@ public final class KokoData {
     /**
      * Creates and stores a globally unique vocabulary card.
      *
-     * @param hiragana Hiragana text stored on the new card
-     * @param romaji romaji pronunciation stored on the new card
-     * @param englishMeaning English meaning stored on the new card
-     * @param creationDate date used for both fresh progress records
-     * @return the newly stored card
-     * @throws IllegalArgumentException if the card is invalid or globally duplicated
-     * @throws NullPointerException if a required argument is null
+     * @param hiragana Hiragana text stored on the new card.
+     * @param romaji romaji pronunciation stored on the new card.
+     * @param englishMeaning English meaning stored on the new card.
+     * @param creationDate date used for both fresh progress records.
+     * @return the newly stored card.
+     * @throws IllegalArgumentException if the card is invalid or globally duplicated.
+     * @throws NullPointerException if a required argument is null.
      */
     public VocabularyCard addVocabularyCard(String hiragana, String romaji,
             String englishMeaning, LocalDate creationDate) {
@@ -88,10 +88,10 @@ public final class KokoData {
     /**
      * Creates and stores a deck with a globally unique name.
      *
-     * @param name deck name
-     * @return the newly stored deck
-     * @throws IllegalArgumentException if the name is invalid or already used
-     * @throws NullPointerException if name is null
+     * @param name deck name.
+     * @return the newly stored deck.
+     * @throws IllegalArgumentException if the name is invalid or already used.
+     * @throws NullPointerException if name is null.
      */
     public Deck createDeck(String name) {
         Deck deck = new Deck(name);
@@ -103,10 +103,10 @@ public final class KokoData {
     /**
      * Renames an owned deck while preserving global name uniqueness.
      *
-     * @param deckId ID of the deck to rename
-     * @param newName replacement deck name
-     * @throws IllegalArgumentException if the ID or name is invalid, or the name is already used
-     * @throws NullPointerException if an argument is null
+     * @param deckId ID of the deck to rename.
+     * @param newName replacement deck name.
+     * @throws IllegalArgumentException if the ID or name is invalid, or the name is already used.
+     * @throws NullPointerException if an argument is null.
      */
     public void renameDeck(UUID deckId, String newName) {
         Deck deck = findDeck(deckId);
@@ -122,9 +122,9 @@ public final class KokoData {
     /**
      * Deletes a deck while preserving every globally owned vocabulary card.
      *
-     * @param deckId ID of the deck to delete
-     * @throws IllegalArgumentException if deckId is unknown
-     * @throws NullPointerException if deckId is null
+     * @param deckId ID of the deck to delete.
+     * @throws IllegalArgumentException if deckId is unknown.
+     * @throws NullPointerException if deckId is null.
      */
     public void deleteDeck(UUID deckId) {
         decks.remove(findDeck(deckId));
@@ -133,12 +133,12 @@ public final class KokoData {
     /**
      * Edits an owned card while preserving its identity and progress.
      *
-     * @param cardId ID of the card to edit
-     * @param newHiragana replacement Hiragana text
-     * @param newRomaji replacement romaji pronunciation
-     * @param newEnglishMeaning replacement English meaning
-     * @throws IllegalArgumentException if the ID, text, or global uniqueness rule is invalid
-     * @throws NullPointerException if an argument is null
+     * @param cardId ID of the card to edit.
+     * @param newHiragana replacement Hiragana text.
+     * @param newRomaji replacement romaji pronunciation.
+     * @param newEnglishMeaning replacement English meaning.
+     * @throws IllegalArgumentException if the ID, text, or global uniqueness rule is invalid.
+     * @throws NullPointerException if an argument is null.
      */
     public void editVocabularyCard(UUID cardId, String newHiragana, String newRomaji,
             String newEnglishMeaning) {
@@ -158,10 +158,10 @@ public final class KokoData {
     /**
      * Adds a global card reference to a deck while preserving referential integrity.
      *
-     * @param deckId ID of an owned deck
-     * @param cardId ID of an owned vocabulary card
-     * @throws IllegalArgumentException if either ID is unknown or membership is duplicated
-     * @throws NullPointerException if an ID is null
+     * @param deckId ID of an owned deck.
+     * @param cardId ID of an owned vocabulary card.
+     * @throws IllegalArgumentException if either ID is unknown or membership is duplicated.
+     * @throws NullPointerException if an ID is null.
      */
     public void addCardToDeck(UUID deckId, UUID cardId) {
         findDeck(deckId).addCard(requireVocabularyCard(cardId).id());
@@ -170,10 +170,10 @@ public final class KokoData {
     /**
      * Removes a card reference from a deck without deleting the global card.
      *
-     * @param deckId ID of an owned deck
-     * @param cardId ID of an owned vocabulary card
-     * @throws IllegalArgumentException if either ID is unknown or membership is absent
-     * @throws NullPointerException if an ID is null
+     * @param deckId ID of an owned deck.
+     * @param cardId ID of an owned vocabulary card.
+     * @throws IllegalArgumentException if either ID is unknown or membership is absent.
+     * @throws NullPointerException if an ID is null.
      */
     public void removeCardFromDeck(UUID deckId, UUID cardId) {
         requireVocabularyCard(cardId);
@@ -183,9 +183,9 @@ public final class KokoData {
     /**
      * Deletes a global card and every membership that references it.
      *
-     * @param cardId ID of the global card to delete
-     * @throws IllegalArgumentException if cardId is unknown
-     * @throws NullPointerException if cardId is null
+     * @param cardId ID of the global card to delete.
+     * @throws IllegalArgumentException if cardId is unknown.
+     * @throws NullPointerException if cardId is null.
      */
     public void deleteVocabularyCard(UUID cardId) {
         VocabularyCard card = requireVocabularyCard(cardId);
@@ -200,8 +200,8 @@ public final class KokoData {
     /**
      * Finds a globally stored vocabulary card.
      *
-     * @param cardId card ID to find
-     * @return matching card, or empty when no card has that ID
+     * @param cardId card ID to find.
+     * @return matching card, or empty when no card has that ID.
      */
     public java.util.Optional<VocabularyCard> findVocabularyCard(UUID cardId) {
         Objects.requireNonNull(cardId, "Card ID cannot be null");
@@ -211,8 +211,8 @@ public final class KokoData {
     /**
      * Finds an owned deck.
      *
-     * @param deckId deck ID to find
-     * @return matching deck, or empty when no deck has that ID
+     * @param deckId deck ID to find.
+     * @return matching deck, or empty when no deck has that ID.
      */
     public java.util.Optional<Deck> findDeckById(UUID deckId) {
         Objects.requireNonNull(deckId, "Deck ID cannot be null");
@@ -222,7 +222,7 @@ public final class KokoData {
     /**
      * Returns the ordered global vocabulary library as a read-only collection.
      *
-     * @return read-only vocabulary cards in insertion order
+     * @return read-only vocabulary cards in insertion order.
      */
     public List<VocabularyCard> vocabularyCards() {
         return Collections.unmodifiableList(vocabularyCards);
@@ -231,7 +231,7 @@ public final class KokoData {
     /**
      * Returns the ordered decks as a read-only collection.
      *
-     * @return read-only decks in insertion order
+     * @return read-only decks in insertion order.
      */
     public List<Deck> decks() {
         return Collections.unmodifiableList(decks);

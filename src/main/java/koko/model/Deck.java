@@ -18,9 +18,9 @@ public final class Deck {
     /**
      * Creates a deck with a new stable identity.
      *
-     * @param name deck name
-     * @throws IllegalArgumentException if name is blank
-     * @throws NullPointerException if name is null
+     * @param name deck name.
+     * @throws IllegalArgumentException if name is blank.
+     * @throws NullPointerException if name is null.
      */
     public Deck(String name) {
         id = UUID.randomUUID();
@@ -37,12 +37,12 @@ public final class Deck {
     /**
      * Restores a deck with its persisted identity and ordered card references.
      *
-     * @param id stable deck UUID
-     * @param name deck name
-     * @param restoredCardIds ordered global card UUID references
-     * @return the restored deck
-     * @throws IllegalArgumentException if the name is blank or a card reference is duplicated
-     * @throws NullPointerException if an argument or card reference is null
+     * @param id stable deck UUID.
+     * @param name deck name.
+     * @param restoredCardIds ordered global card UUID references.
+     * @return the restored deck.
+     * @throws IllegalArgumentException if the name is blank or a card reference is duplicated.
+     * @throws NullPointerException if an argument or card reference is null.
      */
     public static Deck restore(UUID id, String name, List<UUID> restoredCardIds) {
         Deck deck = new Deck(Objects.requireNonNull(id, "Deck ID cannot be null"), name);
@@ -56,9 +56,9 @@ public final class Deck {
     /**
      * Renames this deck after trimming its new name.
      *
-     * @param newName replacement deck name
-     * @throws IllegalArgumentException if newName is blank
-     * @throws NullPointerException if newName is null
+     * @param newName replacement deck name.
+     * @throws IllegalArgumentException if newName is blank.
+     * @throws NullPointerException if newName is null.
      */
     void rename(String newName) {
         name = requireNonBlank(newName, "Deck name");
@@ -67,7 +67,7 @@ public final class Deck {
     /**
      * Returns the deck's stable identity.
      *
-     * @return deck UUID
+     * @return deck UUID.
      */
     public UUID id() {
         return id;
@@ -80,7 +80,7 @@ public final class Deck {
     /**
      * Returns an unmodifiable view of the ordered card references.
      *
-     * @return read-only ordered card UUIDs
+     * @return read-only ordered card UUIDs.
      */
     public List<UUID> cardIds() {
         return Collections.unmodifiableList(cardIds);

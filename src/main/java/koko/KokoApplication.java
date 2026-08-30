@@ -29,7 +29,7 @@ public class KokoApplication extends Application {
     /**
      * Loads the root view and stylesheet, then displays the primary stage.
      *
-     * @param stage primary stage supplied by JavaFX
+     * @param stage primary stage supplied by JavaFX.
      */
     @Override
     public void start(Stage stage) {
@@ -51,8 +51,8 @@ public class KokoApplication extends Application {
     /**
      * Loads the main FXML view from the application classpath.
      *
-     * @return the root node defined by the FXML view
-     * @throws IllegalStateException if the view is missing or cannot be parsed
+     * @return the root node defined by the FXML view.
+     * @throws IllegalStateException if the view is missing or cannot be parsed.
      */
     private Parent loadRootView(FXMLLoader loader) {
         try {
@@ -86,9 +86,9 @@ public class KokoApplication extends Application {
     /**
      * Finds a required resource on the application classpath.
      *
-     * @param resourcePath absolute classpath path to the resource
-     * @return the resource URL
-     * @throws IllegalStateException if the resource is not on the classpath
+     * @param resourcePath absolute classpath path to the resource.
+     * @return the resource URL.
+     * @throws IllegalStateException if the resource is not on the classpath.
      */
     private URL requireResource(String resourcePath) {
         URL resource = KokoApplication.class.getResource(resourcePath);

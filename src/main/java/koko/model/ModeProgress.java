@@ -20,13 +20,13 @@ public final class ModeProgress {
     /**
      * Creates a validated progress snapshot.
      *
-     * @param mastery mastery level from zero to five, inclusive
-     * @param attempts total number of attempts
-     * @param correctAttempts number of correct attempts
-     * @param lastReviewedDate date of the latest review, or null if never reviewed
-     * @param nextDueDate date on which the mode is next due
-     * @throws IllegalArgumentException if a numeric invariant is violated
-     * @throws NullPointerException if nextDueDate is null
+     * @param mastery mastery level from zero to five, inclusive.
+     * @param attempts total number of attempts.
+     * @param correctAttempts number of correct attempts.
+     * @param lastReviewedDate date of the latest review, or null if never reviewed.
+     * @param nextDueDate date on which the mode is next due.
+     * @throws IllegalArgumentException if a numeric invariant is violated.
+     * @throws NullPointerException if nextDueDate is null.
      */
     public ModeProgress(int mastery, int attempts, int correctAttempts,
             LocalDate lastReviewedDate, LocalDate nextDueDate) {
@@ -45,9 +45,9 @@ public final class ModeProgress {
     /**
      * Creates the initial progress for a newly created card.
      *
-     * @param creationDate date on which the card is created and first due
-     * @return fresh initial progress
-     * @throws NullPointerException if creationDate is null
+     * @param creationDate date on which the card is created and first due.
+     * @return fresh initial progress.
+     * @throws NullPointerException if creationDate is null.
      */
     public static ModeProgress forCreationDate(LocalDate creationDate) {
         return new ModeProgress(0, 0, 0, null,
@@ -57,9 +57,9 @@ public final class ModeProgress {
     /**
      * Returns a copy with a different validated mastery value.
      *
-     * @param newMastery replacement mastery from zero to five, inclusive
-     * @return progress with the replacement mastery
-     * @throws IllegalArgumentException if newMastery is outside the valid range
+     * @param newMastery replacement mastery from zero to five, inclusive.
+     * @return progress with the replacement mastery.
+     * @throws IllegalArgumentException if newMastery is outside the valid range.
      */
     public ModeProgress withMastery(int newMastery) {
         return new ModeProgress(newMastery, attempts, correctAttempts,
@@ -69,8 +69,8 @@ public final class ModeProgress {
     /**
      * Returns whether this progress is due on the supplied date.
      *
-     * @param date date against which due status is checked
-     * @return true when the next due date is on or before date
+     * @param date date against which due status is checked.
+     * @return true when the next due date is on or before date.
      */
     public boolean isDueOn(LocalDate date) {
         return !nextDueDate.isAfter(Objects.requireNonNull(date, "Date cannot be null"));

@@ -28,12 +28,12 @@ public final class VocabularyCard {
     /**
      * Creates a card with a new stable identity and fresh progress in both modes.
      *
-     * @param hiragana Hiragana text stored on this card
-     * @param romaji romaji pronunciation stored on this card
-     * @param englishMeaning English meaning stored on this card
-     * @param creationDate date used as the initial due date
-     * @throws IllegalArgumentException if any text is blank or uses invalid characters
-     * @throws NullPointerException if any text or creationDate is null
+     * @param hiragana Hiragana text stored on this card.
+     * @param romaji romaji pronunciation stored on this card.
+     * @param englishMeaning English meaning stored on this card.
+     * @param creationDate date used as the initial due date.
+     * @throws IllegalArgumentException if any text is blank or uses invalid characters.
+     * @throws NullPointerException if any text or creationDate is null.
      */
     public VocabularyCard(String hiragana, String romaji, String englishMeaning,
             LocalDate creationDate) {
@@ -51,15 +51,15 @@ public final class VocabularyCard {
     /**
      * Restores a card with its persisted identity and mode-specific progress.
      *
-     * @param id stable card UUID
-     * @param hiragana Hiragana text stored on this card
-     * @param romaji romaji pronunciation stored on this card
-     * @param englishMeaning English meaning stored on this card
-     * @param flashcardProgress persisted flashcard progress
-     * @param typingProgress persisted typing progress
-     * @return the restored vocabulary card
-     * @throws IllegalArgumentException if any text is blank or uses invalid characters
-     * @throws NullPointerException if an argument is null
+     * @param id stable card UUID.
+     * @param hiragana Hiragana text stored on this card.
+     * @param romaji romaji pronunciation stored on this card.
+     * @param englishMeaning English meaning stored on this card.
+     * @param flashcardProgress persisted flashcard progress.
+     * @param typingProgress persisted typing progress.
+     * @return the restored vocabulary card.
+     * @throws IllegalArgumentException if any text is blank or uses invalid characters.
+     * @throws NullPointerException if an argument is null.
      */
     public static VocabularyCard restore(UUID id, String hiragana, String romaji,
             String englishMeaning, ModeProgress flashcardProgress,
@@ -75,11 +75,11 @@ public final class VocabularyCard {
     /**
      * Changes the card text while preserving identity and both progress records.
      *
-     * @param newHiragana replacement Hiragana text
-     * @param newRomaji replacement romaji pronunciation
-     * @param newEnglishMeaning replacement English meaning
-     * @throws IllegalArgumentException if any text is blank or uses invalid characters
-     * @throws NullPointerException if any text is null
+     * @param newHiragana replacement Hiragana text.
+     * @param newRomaji replacement romaji pronunciation.
+     * @param newEnglishMeaning replacement English meaning.
+     * @throws IllegalArgumentException if any text is blank or uses invalid characters.
+     * @throws NullPointerException if any text is null.
      */
     void editContent(String newHiragana, String newRomaji, String newEnglishMeaning) {
         validateContent(newHiragana, newRomaji, newEnglishMeaning);
@@ -95,11 +95,11 @@ public final class VocabularyCard {
     /**
      * Validates every required text field before any card content is changed.
      *
-     * @param hiragana Hiragana text to validate
-     * @param romaji romaji text to validate
-     * @param englishMeaning English meaning to validate
-     * @throws IllegalArgumentException if a field is blank or uses invalid characters
-     * @throws NullPointerException if a field is null
+     * @param hiragana Hiragana text to validate.
+     * @param romaji romaji text to validate.
+     * @param englishMeaning English meaning to validate.
+     * @throws IllegalArgumentException if a field is blank or uses invalid characters.
+     * @throws NullPointerException if a field is null.
      */
     static void validateContent(String hiragana, String romaji, String englishMeaning) {
         Objects.requireNonNull(hiragana, "Hiragana cannot be null");
@@ -154,9 +154,9 @@ public final class VocabularyCard {
     /**
      * Replaces one mode's complete progress with another validated immutable snapshot.
      *
-     * @param mode mode whose progress is replaced
-     * @param progress replacement progress
-     * @throws NullPointerException if mode or progress is null
+     * @param mode mode whose progress is replaced.
+     * @param progress replacement progress.
+     * @throws NullPointerException if mode or progress is null.
      */
     public void updateProgress(Mode mode, ModeProgress progress) {
         progressByMode.put(Objects.requireNonNull(mode, "Mode cannot be null"),
@@ -182,9 +182,9 @@ public final class VocabularyCard {
     /**
      * Returns the progress belonging to one learning mode.
      *
-     * @param mode mode to inspect
-     * @return the mode's progress snapshot
-     * @throws NullPointerException if mode is null
+     * @param mode mode to inspect.
+     * @return the mode's progress snapshot.
+     * @throws NullPointerException if mode is null.
      */
     public ModeProgress progressFor(Mode mode) {
         return progressByMode.get(Objects.requireNonNull(mode, "Mode cannot be null"));
