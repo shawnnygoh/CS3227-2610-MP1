@@ -120,6 +120,17 @@ public final class KokoData {
     }
 
     /**
+     * Deletes a deck while preserving every globally owned vocabulary card.
+     *
+     * @param deckId ID of the deck to delete
+     * @throws IllegalArgumentException if deckId is unknown
+     * @throws NullPointerException if deckId is null
+     */
+    public void deleteDeck(UUID deckId) {
+        decks.remove(findDeck(deckId));
+    }
+
+    /**
      * Edits an owned card while preserving its identity and progress.
      *
      * @param cardId ID of the card to edit
