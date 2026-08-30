@@ -21,7 +21,7 @@ class KokoDataTest {
     private static final LocalDate CREATION_DATE = LocalDate.of(2026, 8, 29);
 
     @Test
-    void globalDuplicateUsesNormalisedHiraganaAndCaseInsensitiveMeaning() {
+    void globalDuplicateUsesNormalizedHiraganaAndCaseInsensitiveMeaning() {
         KokoData data = new KokoData();
         data.addVocabularyCard("  か\u3099  ", "ga", " Cat ", CREATION_DATE);
 

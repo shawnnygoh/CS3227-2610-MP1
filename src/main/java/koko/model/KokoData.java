@@ -144,11 +144,11 @@ public final class KokoData {
             String newEnglishMeaning) {
         VocabularyCard card = requireVocabularyCard(cardId);
         VocabularyCard.validateContent(newHiragana, newRomaji, newEnglishMeaning);
-        String normalisedHiragana = VocabularyCard.normaliseHiragana(newHiragana);
-        String normalisedMeaning = VocabularyCard.normaliseEnglishMeaning(newEnglishMeaning);
+        String normalizedHiragana = VocabularyCard.normalizeHiragana(newHiragana);
+        String normalizedMeaning = VocabularyCard.normalizeEnglishMeaning(newEnglishMeaning);
         boolean duplicate = vocabularyCards.stream().anyMatch(existing -> existing != card
-                && existing.hiragana().equals(normalisedHiragana)
-                && existing.englishMeaning().equalsIgnoreCase(normalisedMeaning));
+                && existing.hiragana().equals(normalizedHiragana)
+                && existing.englishMeaning().equalsIgnoreCase(normalizedMeaning));
         if (duplicate) {
             throw new IllegalArgumentException("Vocabulary card is already in the global library");
         }

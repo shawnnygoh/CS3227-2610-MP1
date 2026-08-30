@@ -32,7 +32,7 @@ class VocabularyCardTest {
     }
 
     @Test
-    void cardTrimsTextAndNormalisesHiraganaToNfc() {
+    void cardTrimsTextAndNormalizesHiraganaToNfc() {
         VocabularyCard card = new VocabularyCard("  か\u3099  ", " neko ", " cat ", CREATION_DATE);
 
         assertEquals("が", card.hiragana());
@@ -41,7 +41,7 @@ class VocabularyCardTest {
     }
 
     @Test
-    void cardNormalisesDecomposedRomajiBeforeValidationAndStorage() {
+    void cardNormalizesDecomposedRomajiBeforeValidationAndStorage() {
         VocabularyCard card = new VocabularyCard("こーひー", "ko\u0304hi\u0304",
                 "coffee", CREATION_DATE);
 

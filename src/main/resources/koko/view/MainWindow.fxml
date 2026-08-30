@@ -23,7 +23,7 @@
                             mnemonicParsing="true" />
                 </right>
             </BorderPane>
-            <Label text="Build a reusable Japanese vocabulary library and organise it into decks."
+            <Label text="Build a reusable Japanese vocabulary library and organize it into decks."
                    styleClass="subtitle" wrapText="true" />
         </VBox>
     </top>

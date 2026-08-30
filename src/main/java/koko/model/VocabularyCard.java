@@ -83,13 +83,13 @@ public final class VocabularyCard {
      */
     void editContent(String newHiragana, String newRomaji, String newEnglishMeaning) {
         validateContent(newHiragana, newRomaji, newEnglishMeaning);
-        String normalisedHiragana = normaliseHiragana(newHiragana);
-        String normalisedRomaji = normaliseRomaji(newRomaji);
-        String normalisedEnglishMeaning = normaliseEnglishMeaning(newEnglishMeaning);
+        String normalizedHiragana = normalizeHiragana(newHiragana);
+        String normalizedRomaji = normalizeRomaji(newRomaji);
+        String normalizedEnglishMeaning = normalizeEnglishMeaning(newEnglishMeaning);
 
-        hiragana = normalisedHiragana;
-        romaji = normalisedRomaji;
-        englishMeaning = normalisedEnglishMeaning;
+        hiragana = normalizedHiragana;
+        romaji = normalizedRomaji;
+        englishMeaning = normalizedEnglishMeaning;
     }
 
     /**
@@ -105,14 +105,14 @@ public final class VocabularyCard {
         Objects.requireNonNull(hiragana, "Hiragana cannot be null");
         Objects.requireNonNull(romaji, "Romaji cannot be null");
         Objects.requireNonNull(englishMeaning, "English meaning cannot be null");
-        String normalisedHiragana = Normalizer.normalize(hiragana.strip(), Normalizer.Form.NFC);
-        String normalisedRomaji = Normalizer.normalize(romaji.strip(), Normalizer.Form.NFC);
-        String normalisedEnglishMeaning = Normalizer.normalize(englishMeaning.strip(),
+        String normalizedHiragana = Normalizer.normalize(hiragana.strip(), Normalizer.Form.NFC);
+        String normalizedRomaji = Normalizer.normalize(romaji.strip(), Normalizer.Form.NFC);
+        String normalizedEnglishMeaning = Normalizer.normalize(englishMeaning.strip(),
                 Normalizer.Form.NFC);
         List<String> errors = new ArrayList<>();
-        addValidationError(errors, "Hiragana", normalisedHiragana, VocabularyCard::isHiragana);
-        addValidationError(errors, "Romaji", normalisedRomaji, VocabularyCard::isLatinText);
-        addValidationError(errors, "English meaning", normalisedEnglishMeaning,
+        addValidationError(errors, "Hiragana", normalizedHiragana, VocabularyCard::isHiragana);
+        addValidationError(errors, "Romaji", normalizedRomaji, VocabularyCard::isLatinText);
+        addValidationError(errors, "English meaning", normalizedEnglishMeaning,
                 VocabularyCard::isLatinText);
         if (!errors.isEmpty()) {
             throw new IllegalArgumentException(String.join("; ", errors));
@@ -198,15 +198,15 @@ public final class VocabularyCard {
         return progress;
     }
 
-    static String normaliseHiragana(String value) {
+    static String normalizeHiragana(String value) {
         return Normalizer.normalize(requireNonBlank(value, "Hiragana"), Normalizer.Form.NFC);
     }
 
-    static String normaliseRomaji(String value) {
+    static String normalizeRomaji(String value) {
         return Normalizer.normalize(requireNonBlank(value, "Romaji"), Normalizer.Form.NFC);
     }
 
-    static String normaliseEnglishMeaning(String value) {
+    static String normalizeEnglishMeaning(String value) {
         return Normalizer.normalize(requireNonBlank(value, "English meaning"),
                 Normalizer.Form.NFC);
     }

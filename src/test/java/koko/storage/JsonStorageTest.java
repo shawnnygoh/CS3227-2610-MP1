@@ -87,7 +87,7 @@ class JsonStorageTest {
     }
 
     @Test
-    void roundTripNormalisesCanonicallyEquivalentRomaji() throws StorageException {
+    void roundTripNormalizesCanonicallyEquivalentRomaji() throws StorageException {
         Path path = temporaryDirectory.resolve("decomposed-romaji.json");
         JsonStorage storage = new JsonStorage(path);
         KokoData original = new KokoData();

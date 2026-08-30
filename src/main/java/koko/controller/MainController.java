@@ -181,7 +181,7 @@ public final class MainController {
                 + "deck that contains it.");
         Optional<ButtonType> result = confirmation.showAndWait();
         if (result.isEmpty() || result.get() != ButtonType.OK) {
-            setGuidance("Global deletion cancelled. The card and its deck placements are unchanged.");
+            setGuidance("Global deletion canceled. The card and its deck placements are unchanged.");
             return;
         }
         runMutation("Deleted " + selected.hiragana() + " globally and removed it from all decks.", () ->
@@ -240,7 +240,7 @@ public final class MainController {
                 + "vocabulary cards remain available in the library and other decks.");
         Optional<ButtonType> result = confirmation.showAndWait();
         if (result.isEmpty() || result.get() != ButtonType.OK) {
-            setGuidance("Deck deletion cancelled. The deck and its cards are unchanged.");
+            setGuidance("Deck deletion canceled. The deck and its cards are unchanged.");
             return;
         }
         runMutation("Deleted deck “" + selected.name()

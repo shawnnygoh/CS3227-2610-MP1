@@ -1,6 +1,6 @@
 # Project context
 
-Koko is a greenfield Java 25 JavaFX desktop application for learning Japanese vocabulary developed for an agentic software engineering course in an undergraduate computer science program. It allows users to keep track of Japanese vocabulary they have been learning and test themselves using spaced repetition.
+Koko is a greenfield Java 25 JavaFX desktop application for learning Japanese vocabulary developed for an agentic software engineering course in an undergraduate computer science program. It maintains a global vocabulary library whose cards can be organized into one or more decks and practiced using spaced repetition.
 
 # Default user context
 
