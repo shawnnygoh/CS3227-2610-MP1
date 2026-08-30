@@ -70,7 +70,7 @@ public final class TypingSession {
     private State state;
 
     /**
-     * Creates a session for the typing-due cards in a selected deck.
+     * Creates a session for cards due for the Typing mode in a selected deck.
      *
      * <p>Eligibility is evaluated once using the date from {@code clock}. Cards are
      * ordered by oldest due date first, with stable deck order for equal due dates.
@@ -93,7 +93,7 @@ public final class TypingSession {
     }
 
     /**
-     * Creates a session for typing-due cards in a selected deck.
+     * Creates a session for cards due for the Typing mode in a selected deck.
      *
      * @param service service holding the current global cards and decks.
      * @param deckId selected deck.

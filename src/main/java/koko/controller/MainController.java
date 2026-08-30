@@ -21,12 +21,15 @@ import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.util.Callback;
 import koko.model.Deck;
+import koko.model.Mode;
 import koko.model.VocabularyCard;
 import koko.review.FlashcardSession;
 import koko.review.TypingSession;
@@ -49,8 +52,12 @@ public final class MainController {
     private final String startupError;
     private final Clock clock;
     private final Callback<Class<?>, Object> controllerFactory;
+    /** Groups the two review-mode choices into one selection. */
+    private final ToggleGroup reviewModeGroup = new ToggleGroup();
     private FlashcardSession activeReview;
     private TypingSession activeTypingReview;
+    /** The review mode selected on the management screen. */
+    private Mode selectedMode = Mode.FLASHCARD;
     private Scene managementScene;
 
     @FXML
@@ -69,6 +76,10 @@ public final class MainController {
     private Label selectedDeckLabel;
     @FXML
     private Label guidanceLabel;
+    @FXML
+    private RadioButton flashcardModeButton;
+    @FXML
+    private RadioButton typingModeButton;
     @FXML
     private Button editCardButton;
     @FXML
@@ -91,8 +102,6 @@ public final class MainController {
     private Button reviewSelectedCardButton;
     @FXML
     private Button reviewDueButton;
-    @FXML
-    private Button typingDueButton;
 
     /**
      * Creates a controller for the already-created application service.
@@ -135,6 +144,16 @@ public final class MainController {
      */
     @FXML
     private void initialize() {
+        flashcardModeButton.setToggleGroup(reviewModeGroup);
+        typingModeButton.setToggleGroup(reviewModeGroup);
+        flashcardModeButton.setSelected(true);
+        reviewModeGroup.selectedToggleProperty().addListener((observable, oldToggle, newToggle) -> {
+            if (newToggle == flashcardModeButton) {
+                selectedMode = Mode.FLASHCARD;
+            } else if (newToggle == typingModeButton) {
+                selectedMode = Mode.TYPING;
+            }
+        });
         vocabularyList.setCellFactory(list -> new ListCell<>() {
             @Override
             protected void updateItem(VocabularyCard card, boolean empty) {
@@ -210,8 +229,14 @@ public final class MainController {
             setGuidance("Select a global vocabulary card to review it.");
             return;
         }
-        startReview(() -> FlashcardSession.forCard(service, selected.id(), clock),
-                "Reviewing the selected global card.");
+        Mode mode = selectedMode;
+        if (mode == Mode.FLASHCARD) {
+            startReview(() -> FlashcardSession.forCard(service, selected.id(), clock),
+                    "Reviewing the selected global card in Flashcard mode.");
+        } else {
+            startTypingReview(() -> TypingSession.forCard(service, selected.id(), clock),
+                    "Reviewing the selected global card in Typing mode.");
+        }
     }
 
     @FXML
@@ -221,11 +246,17 @@ public final class MainController {
         }
         Deck selected = deckList.getSelectionModel().getSelectedItem();
         if (selected == null) {
-            setGuidance("Select a deck to review its due flashcards.");
+            setGuidance("Select a deck to review its due cards.");
             return;
         }
-        startReview(() -> FlashcardSession.forDeck(service, selected.id(), clock),
-                "Reviewing due flashcards from “" + selected.name() + "”.");
+        Mode mode = selectedMode;
+        if (mode == Mode.FLASHCARD) {
+            startReview(() -> FlashcardSession.forDeck(service, selected.id(), clock),
+                    "Reviewing due cards from “" + selected.name() + "” in Flashcard mode.");
+        } else {
+            startTypingReview(() -> TypingSession.forDeck(service, selected.id(), clock),
+                    "Reviewing due cards from “" + selected.name() + "” in Typing mode.");
+        }
     }
 
     @FXML
@@ -235,25 +266,17 @@ public final class MainController {
         }
         Deck selected = deckList.getSelectionModel().getSelectedItem();
         if (selected == null) {
-            setGuidance("Select a deck to review all of its flashcards.");
+            setGuidance("Select a deck to review all of its cards.");
             return;
         }
-        startReview(() -> FlashcardSession.forAllCardsInDeck(service, selected.id(), clock),
-                "Reviewing all flashcards from “" + selected.name() + "”.");
-    }
-
-    @FXML
-    private void reviewTypingDueCards() {
-        if (!reviewCanStart()) {
-            return;
+        Mode mode = selectedMode;
+        if (mode == Mode.FLASHCARD) {
+            startReview(() -> FlashcardSession.forAllCardsInDeck(service, selected.id(), clock),
+                    "Reviewing all cards from “" + selected.name() + "” in Flashcard mode.");
+        } else {
+            startTypingReview(() -> TypingSession.forAllCardsInDeck(service, selected.id(), clock),
+                    "Reviewing all cards from “" + selected.name() + "” in Typing mode.");
         }
-        Deck selected = deckList.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            setGuidance("Select a deck to review its due typing cards.");
-            return;
-        }
-        startTypingReview(() -> TypingSession.forDeck(service, selected.id(), clock),
-                "Typing review from “" + selected.name() + "”.");
     }
 
     @FXML
@@ -404,7 +427,7 @@ public final class MainController {
         help.getDialogPane().getStyleClass().add("help-dialog");
         help.getDialogPane().setContent(content);
         help.showAndWait();
-        setGuidance("Tip: select a deck to display its cards, then choose a review mode.");
+        setGuidance("Tip: choose a review mode for how to answer, then choose which cards to review.");
     }
 
     private void refreshViews() {
@@ -449,6 +472,8 @@ public final class MainController {
         boolean hasDeckCard = deckCardList.getSelectionModel().getSelectedItem() != null;
         boolean storageReady = startupError == null;
         boolean reviewActive = reviewActive();
+        flashcardModeButton.setDisable(!storageReady || reviewActive);
+        typingModeButton.setDisable(!storageReady || reviewActive);
         addCardButton.setDisable(!storageReady || reviewActive);
         editCardButton.setDisable(!storageReady || !hasCard || reviewActive);
         deleteCardButton.setDisable(!storageReady || !hasCard || reviewActive);
@@ -461,7 +486,6 @@ public final class MainController {
         removeFromDeckButton.setDisable(!storageReady || !hasDeckCard || reviewActive);
         reviewSelectedCardButton.setDisable(!storageReady || !hasCard || reviewActive);
         reviewDueButton.setDisable(!storageReady || !hasDeck || reviewActive);
-        typingDueButton.setDisable(!storageReady || !hasDeck || reviewActive);
     }
 
     private CardInput promptCard(VocabularyCard existing, CardInput initialValues) {

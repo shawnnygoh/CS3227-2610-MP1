@@ -28,7 +28,7 @@
 
 .management-split {
     -fx-background-color: transparent;
-    -fx-padding: 14;
+    -fx-padding: 10 14;
 }
 
 .management-split > .split-pane-divider {
@@ -42,7 +42,7 @@
     -fx-border-color: #d3e1d6;
     -fx-border-radius: 10;
     -fx-border-width: 1;
-    -fx-padding: 14;
+    -fx-padding: 8 14;
 }
 
 .section-title {
@@ -60,15 +60,6 @@
     -fx-font-size: 14px;
     -fx-font-weight: bold;
     -fx-text-fill: #365f50;
-}
-
-.deck-selector {
-    -fx-background-color: #f8fcf9;
-    -fx-background-radius: 8;
-    -fx-border-color: #d8e7db;
-    -fx-border-radius: 8;
-    -fx-border-width: 1;
-    -fx-padding: 10;
 }
 
 .empty-state {
@@ -90,6 +81,10 @@
     -fx-text-fill: #2d4238;
 }
 
+.deck-list .list-cell {
+    -fx-padding: 4 10;
+}
+
 .list-cell:filled:selected {
     -fx-background-color: #cfe7d5;
     -fx-text-fill: #173f2d;
@@ -100,6 +95,10 @@
     -fx-padding: 7 12;
     -fx-font-weight: bold;
     -fx-cursor: hand;
+}
+
+.deck-actions .button {
+    -fx-padding: 7 6;
 }
 
 .primary-button {

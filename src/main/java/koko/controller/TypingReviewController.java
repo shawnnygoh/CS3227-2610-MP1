@@ -198,7 +198,7 @@ public final class TypingReviewController {
         int cardNumber = summary.attempted()
                 + (session.state() == TypingSession.State.PROMPT ? 1 : 0);
         progressLabel.setText(total == 0
-                ? "No typing-due cards in this review queue."
+                ? "No cards in this review queue."
                 : "Card " + cardNumber + " of " + total
                         + " · " + summary.remaining() + " remaining");
         progressBar.setProgress(total == 0 ? 1.0 : summary.attempted() / (double) total);
@@ -263,7 +263,7 @@ public final class TypingReviewController {
         feedbackPanel.setVisible(false);
         feedbackPanel.setManaged(false);
         summaryLabel.setText(summary.initialQueueSize() == 0
-                ? "No typing-due cards in this review queue."
+                ? "No cards in this review queue."
                 : "Attempted: " + summary.attempted() + "\nCorrect: " + summary.correct()
                         + "\nIncorrect: " + summary.incorrect() + "\nSkipped: "
                         + summary.skipped() + "\nRemaining: " + summary.remaining()
