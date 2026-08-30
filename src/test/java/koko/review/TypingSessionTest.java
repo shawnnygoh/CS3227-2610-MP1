@@ -18,6 +18,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import koko.model.Deck;
 import koko.model.KokoData;
@@ -38,6 +40,33 @@ class TypingSessionTest {
     private static final LocalDate START_DATE = LocalDate.of(2026, 8, 30);
     private static final Clock FIXED_CLOCK = Clock.fixed(
             Instant.parse("2026-08-30T01:00:00Z"), ZoneId.of("Asia/Singapore"));
+
+    @Test
+    void newFactoriesRejectUnknownAndNullSelectionsWithoutSaving() {
+        TestContext context = new TestContext();
+        UUID missingId = UUID.randomUUID();
+        KokoData originalData = context.service.data();
+
+        assertThrows(IllegalArgumentException.class, () ->
+                TypingSession.forCard(context.service, missingId, FIXED_CLOCK));
+        assertThrows(IllegalArgumentException.class, () ->
+                TypingSession.forAllCardsInDeck(context.service, missingId, FIXED_CLOCK));
+        assertThrows(NullPointerException.class, () ->
+                TypingSession.forCard(null, missingId, FIXED_CLOCK));
+        assertThrows(NullPointerException.class, () ->
+                TypingSession.forAllCardsInDeck(null, missingId, FIXED_CLOCK));
+        assertThrows(NullPointerException.class, () ->
+                TypingSession.forCard(context.service, null, FIXED_CLOCK));
+        assertThrows(NullPointerException.class, () ->
+                TypingSession.forAllCardsInDeck(context.service, null, FIXED_CLOCK));
+        assertThrows(NullPointerException.class, () ->
+                TypingSession.forCard(context.service, missingId, null));
+        assertThrows(NullPointerException.class, () ->
+                TypingSession.forAllCardsInDeck(context.service, missingId, null));
+
+        assertSame(originalData, context.service.data());
+        assertEquals(0, context.storage.saveInvocations);
+    }
 
     @Test
     void emptyAndFutureOnlyDecksStartCompletedWithoutSaving() throws StorageException {
@@ -88,6 +117,91 @@ class TypingSessionTest {
     }
 
     @Test
+    void allCardReviewUsesMembershipOrderRegardlessOfTypingDueDateAndCanRepeat()
+            throws StorageException {
+        TestContext context = new TestContext();
+        VocabularyCard first = context.addCard("あ", "a", "first");
+        VocabularyCard second = context.addCard("い", "i", "second");
+        VocabularyCard third = context.addCard("う", "u", "third");
+        setDueDate(first, Mode.TYPING, START_DATE.plusDays(5));
+        setDueDate(second, Mode.TYPING, START_DATE.minusDays(1));
+        setDueDate(third, Mode.TYPING, START_DATE);
+        Deck deck = context.service.createDeck("Core");
+        addToDeck(context.service, deck, third, first, second);
+        int savesBeforeSession = context.storage.saveInvocations;
+
+        TypingSession session = TypingSession.forAllCardsInDeck(
+                context.service, deck.id(), FIXED_CLOCK);
+        List<UUID> order = new ArrayList<>();
+        while (session.state() == TypingSession.State.PROMPT) {
+            UUID cardId = session.currentCardId().orElseThrow();
+            order.add(cardId);
+            VocabularyCard card = context.service.data().findVocabularyCard(cardId).orElseThrow();
+            session.submit(cardId, card.hiragana());
+            session.next(cardId);
+        }
+
+        assertEquals(List.of(third.id(), first.id(), second.id()), order);
+        assertEquals(new TypingSession.Summary(3, 3, 0, 0, 3, 0, false), session.summary());
+        assertEquals(3, context.storage.saveInvocations - savesBeforeSession);
+        assertEquals(3, context.storage.successfulSaveCount - savesBeforeSession);
+
+        TypingSession repeated = TypingSession.forAllCardsInDeck(
+                context.service, deck.id(), FIXED_CLOCK);
+        assertEquals(TypingSession.State.PROMPT, repeated.state());
+        assertEquals(third.id(), repeated.currentCardId().orElseThrow());
+    }
+
+    @Test
+    void allCardFutureOnlyAndEmptyDecksCompleteWithoutSaving() throws StorageException {
+        TestContext context = new TestContext();
+        VocabularyCard future = context.addCard("み", "mi", "future");
+        setDueDate(future, Mode.TYPING, START_DATE.plusDays(10));
+        Deck futureDeck = context.service.createDeck("Future");
+        context.service.addCardToDeck(futureDeck.id(), future.id());
+        int savesBeforeReview = context.storage.saveInvocations;
+
+        TypingSession futureSession = TypingSession.forAllCardsInDeck(
+                context.service, futureDeck.id(), FIXED_CLOCK);
+        assertEquals(TypingSession.State.PROMPT, futureSession.state());
+        assertEquals(savesBeforeReview, context.storage.saveInvocations);
+        futureSession.submit(future.id(), future.hiragana());
+        futureSession.next(future.id());
+        assertEquals(TypingSession.State.COMPLETED, futureSession.state());
+
+        Deck emptyDeck = context.service.createDeck("Empty");
+        int savesBeforeEmptySession = context.storage.saveInvocations;
+        TypingSession emptySession = TypingSession.forAllCardsInDeck(
+                context.service, emptyDeck.id(), FIXED_CLOCK);
+
+        assertEquals(TypingSession.State.COMPLETED, emptySession.state());
+        assertEquals(new TypingSession.Summary(0, 0, 0, 0, 0, 0, false), emptySession.summary());
+        assertEquals(savesBeforeEmptySession, context.storage.saveInvocations);
+    }
+
+    @Test
+    void selectedCardIgnoresTypingDueDateAndDeckMembershipAndCanRepeat() throws StorageException {
+        TestContext context = new TestContext();
+        VocabularyCard card = context.addCard("が", "ga", "sound");
+        setDueDate(card, Mode.TYPING, START_DATE.plusDays(10));
+        int savesBeforeSession = context.storage.saveInvocations;
+
+        TypingSession session = TypingSession.forCard(context.service, card.id(), FIXED_CLOCK);
+        assertEquals(new TypingSession.Prompt(card.id(), "sound"),
+                session.currentPrompt().orElseThrow());
+        session.submit(card.id(), "  か\u3099  ");
+        assertEquals(ReviewOutcome.CORRECT, session.currentFeedback().orElseThrow().outcome());
+        assertEquals(TypingSession.State.FEEDBACK, session.state());
+        assertEquals(savesBeforeSession + 1, context.storage.saveInvocations);
+        session.next(card.id());
+        assertEquals(TypingSession.State.COMPLETED, session.state());
+
+        TypingSession repeated = TypingSession.forCard(context.service, card.id(), FIXED_CLOCK);
+        assertEquals(TypingSession.State.PROMPT, repeated.state());
+        assertEquals(card.id(), repeated.currentCardId().orElseThrow());
+    }
+
+    @Test
     void queueIsFrozenWhileCurrentEnglishIsResolvedFromGlobalData() throws StorageException {
         TestContext context = new TestContext();
         VocabularyCard first = context.addCard("ね", "ne", "first");
@@ -104,6 +218,35 @@ class TypingSessionTest {
         assertEquals(2, session.summary().initialQueueSize());
         assertEquals(new TypingSession.Prompt(first.id(), "updated"),
                 session.currentPrompt().orElseThrow());
+    }
+
+    @Test
+    void allCardQueueIsFrozenAfterMembershipAndProgressChanges() throws StorageException {
+        TestContext context = new TestContext();
+        VocabularyCard first = context.addCard("ね", "ne", "first");
+        VocabularyCard second = context.addCard("こ", "ko", "second");
+        VocabularyCard addedLater = context.addCard("い", "i", "new");
+        Deck deck = context.service.createDeck("Words");
+        addToDeck(context.service, deck, first, second);
+        TypingSession session = TypingSession.forAllCardsInDeck(
+                context.service, deck.id(), FIXED_CLOCK);
+
+        setDueDate(first, Mode.TYPING, START_DATE.plusDays(10));
+        setDueDate(second, Mode.TYPING, START_DATE.plusDays(10));
+        context.service.addCardToDeck(deck.id(), addedLater.id());
+        context.service.removeCardFromDeck(deck.id(), second.id());
+        context.service.editVocabularyCard(first.id(), "ね", "ne", "updated");
+
+        assertEquals(2, session.summary().initialQueueSize());
+        assertEquals(new TypingSession.Prompt(first.id(), "updated"),
+                session.currentPrompt().orElseThrow());
+        session.submit(first.id(), first.hiragana());
+        session.next(first.id());
+        assertEquals(second.id(), session.currentCardId().orElseThrow());
+        session.submit(second.id(), second.hiragana());
+        session.next(second.id());
+        assertEquals(TypingSession.State.COMPLETED, session.state());
+        assertEquals(new TypingSession.Summary(2, 2, 0, 0, 2, 0, false), session.summary());
     }
 
     @Test
@@ -322,6 +465,84 @@ class TypingSessionTest {
     }
 
     @Test
+    void earlyAllCardReviewSharesTypingProgressAcrossDecksAndLeavesFlashcardAlone()
+            throws StorageException {
+        AtomicReference<Instant> current = new AtomicReference<>(
+                Instant.parse("2026-08-30T01:00:00Z"));
+        InstantSource source = current::get;
+        Clock clock = source.withZone(ZoneId.of("Asia/Singapore"));
+        TestContext context = new TestContext(clock);
+        VocabularyCard card = context.addCard("ねこ", "neko", "cat");
+        ModeProgress originalFlashcard = card.progressFor(Mode.FLASHCARD);
+        ModeProgress originalTyping = new ModeProgress(2, 4, 3,
+                START_DATE.minusDays(2), START_DATE.plusDays(20));
+        card.updateProgress(Mode.TYPING, originalTyping);
+        Deck first = context.service.createDeck("First");
+        Deck second = context.service.createDeck("Second");
+        context.service.addCardToDeck(first.id(), card.id());
+        context.service.addCardToDeck(second.id(), card.id());
+
+        TypingSession firstSession = TypingSession.forAllCardsInDeck(
+                context.service, first.id(), clock);
+        current.set(Instant.parse("2026-08-31T16:00:00Z"));
+        firstSession.submit(card.id(), card.hiragana());
+        firstSession.next(card.id());
+
+        VocabularyCard updated = context.service.data().findVocabularyCard(card.id()).orElseThrow();
+        assertProgressEquals(new ModeProgress(3, 5, 4, LocalDate.of(2026, 9, 1),
+                LocalDate.of(2026, 9, 8)), updated.progressFor(Mode.TYPING));
+        assertProgressEquals(originalFlashcard, updated.progressFor(Mode.FLASHCARD));
+        assertEquals(TypingSession.State.COMPLETED,
+                TypingSession.forDeck(context.service, second.id(), clock).state());
+        assertEquals(TypingSession.State.PROMPT,
+                TypingSession.forAllCardsInDeck(context.service, second.id(), clock).state());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void newFactoriesCanRetryFailedSaveAndStopWithoutDuplicateAttempt(boolean reviewAll)
+            throws StorageException {
+        TestContext context = new TestContext();
+        VocabularyCard card = context.addCard("ね", "ne", "root");
+        setDueDate(card, Mode.TYPING, START_DATE.plusDays(10));
+        Deck deck = context.service.createDeck("Words");
+        context.service.addCardToDeck(deck.id(), card.id());
+        TypingSession session = reviewAll
+                ? TypingSession.forAllCardsInDeck(context.service, deck.id(), FIXED_CLOCK)
+                : TypingSession.forCard(context.service, card.id(), FIXED_CLOCK);
+        KokoData originalData = context.service.data();
+        ModeProgress originalProgress = card.progressFor(Mode.TYPING);
+        TypingSession.Summary originalSummary = session.summary();
+        int savesBeforeFailure = context.storage.saveInvocations;
+        int successfulSavesBeforeFailure = context.storage.successfulSaveCount;
+        context.storage.failNextSave = true;
+
+        assertThrows(StorageException.class, () -> session.submit(card.id(), card.hiragana()));
+        assertSame(originalData, context.service.data());
+        assertSame(originalProgress, card.progressFor(Mode.TYPING));
+        assertEquals(originalSummary, session.summary());
+        assertEquals(TypingSession.State.PROMPT, session.state());
+        assertEquals(savesBeforeFailure + 1, context.storage.saveInvocations);
+        assertEquals(successfulSavesBeforeFailure, context.storage.successfulSaveCount);
+
+        session.submit(card.id(), card.hiragana());
+        VocabularyCard updated = context.service.data().findVocabularyCard(card.id()).orElseThrow();
+        assertEquals(1, updated.progressFor(Mode.TYPING).attempts());
+        assertEquals(1, context.storage.load().findVocabularyCard(card.id()).orElseThrow()
+                .progressFor(Mode.TYPING).attempts());
+        assertEquals(savesBeforeFailure + 2, context.storage.saveInvocations);
+        assertEquals(successfulSavesBeforeFailure + 1, context.storage.successfulSaveCount);
+        assertEquals(1, session.attempted());
+
+        session.stop(card.id());
+        session.stop(card.id());
+        assertEquals(TypingSession.State.STOPPED, session.state());
+        assertEquals(1, session.attempted());
+        assertEquals(savesBeforeFailure + 2, context.storage.saveInvocations);
+        assertThrows(IllegalStateException.class, () -> session.submit(card.id(), card.hiragana()));
+    }
+
+    @Test
     void typingSessionPersistsAndRestoresThroughRealJson(@TempDir Path temporaryDirectory)
             throws StorageException {
         JsonStorage storage = new JsonStorage(temporaryDirectory.resolve("koko.json"));
@@ -388,6 +609,7 @@ class TypingSessionTest {
 
         private KokoData loadedData = new KokoData();
         private int saveInvocations;
+        private int successfulSaveCount;
         private boolean failNextSave;
 
         @Override
@@ -403,6 +625,7 @@ class TypingSessionTest {
                 throw new StorageException("forced save failure", null);
             }
             loadedData = copyOf(data);
+            successfulSaveCount++;
         }
 
         private static KokoData copyOf(KokoData source) {

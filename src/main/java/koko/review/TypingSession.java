@@ -107,6 +107,46 @@ public final class TypingSession {
     }
 
     /**
+     * Creates a session containing one selected global card, regardless of due status
+     * or deck membership.
+     *
+     * @param service service holding the selected card.
+     * @param cardId selected global card.
+     * @param clock clock used to establish the session start date.
+     * @return a session containing the selected card.
+     * @throws IllegalArgumentException if the card does not exist.
+     * @throws NullPointerException if an argument is null.
+     */
+    public static TypingSession forCard(KokoService service, UUID cardId, Clock clock) {
+        KokoService checkedService = Objects.requireNonNull(service, "Service cannot be null");
+        Objects.requireNonNull(clock, "Clock cannot be null");
+        UUID checkedCardId = Objects.requireNonNull(cardId, "Card ID cannot be null");
+        requireCardForStart(checkedService, checkedCardId);
+        return new TypingSession(checkedService, List.of(checkedCardId));
+    }
+
+    /**
+     * Creates a session for every card in a selected deck.
+     *
+     * <p>Cards are included once in their deck membership order, regardless of
+     * due status. The membership snapshot is taken when this method is called.
+     *
+     * @param service service holding the current global cards and decks.
+     * @param deckId selected deck.
+     * @param clock clock used to establish the session start date.
+     * @return an all-card deck session.
+     * @throws IllegalArgumentException if the deck or a referenced card does not exist.
+     * @throws NullPointerException if an argument is null.
+     */
+    public static TypingSession forAllCardsInDeck(KokoService service, UUID deckId,
+            Clock clock) {
+        KokoService checkedService = Objects.requireNonNull(service, "Service cannot be null");
+        UUID checkedDeckId = Objects.requireNonNull(deckId, "Deck ID cannot be null");
+        Objects.requireNonNull(clock, "Clock cannot be null");
+        return new TypingSession(checkedService, allCardIds(checkedService, checkedDeckId));
+    }
+
+    /**
      * Returns the current lifecycle state.
      *
      * @return current session state.
@@ -344,6 +384,11 @@ public final class TypingSession {
                 new IllegalStateException("Vocabulary card " + cardId + " no longer exists"));
     }
 
+    private static VocabularyCard requireCardForStart(KokoService service, UUID cardId) {
+        return service.data().findVocabularyCard(cardId).orElseThrow(() ->
+                new IllegalArgumentException("Vocabulary card " + cardId + " does not exist"));
+    }
+
     private static List<UUID> dueCardIds(KokoService service, UUID deckId, Clock clock) {
         Objects.requireNonNull(service, "Service cannot be null");
         UUID checkedDeckId = Objects.requireNonNull(deckId, "Deck ID cannot be null");
@@ -366,5 +411,19 @@ public final class TypingSession {
         }
         dueCards.sort(Comparator.comparing(QueuedCard::dueDate));
         return dueCards.stream().map(QueuedCard::cardId).toList();
+    }
+
+    private static List<UUID> allCardIds(KokoService service, UUID deckId) {
+        Deck deck = service.data().findDeckById(deckId).orElseThrow(() ->
+                new IllegalArgumentException("Deck does not exist"));
+        Set<UUID> seenCardIds = new LinkedHashSet<>();
+        List<UUID> cardIds = new ArrayList<>();
+        for (UUID cardId : deck.cardIds()) {
+            if (seenCardIds.add(cardId)) {
+                VocabularyCard card = requireCardForStart(service, cardId);
+                cardIds.add(card.id());
+            }
+        }
+        return cardIds;
     }
 }
