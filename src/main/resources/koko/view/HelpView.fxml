@@ -17,6 +17,15 @@
                 <Label wrapText="true" minHeight="-Infinity"
                        text="A word can belong to several decks or none. You can rename decks. Removing a card from a deck, or deleting a deck, keeps the global cards. Deleting a global card removes it from every deck and asks for confirmation." />
             </VBox>
+            <VBox spacing="8" minWidth="0">
+                <Label text="Transfer decks" styleClass="subsection-title" />
+                <Label wrapText="true" minHeight="-Infinity"
+                       text="Use Transfer to import or export one deck as UTF-8 JSON. Import creates one deck and keeps card membership order. Portable transfer is vocabulary-only: each card contains Hiragana, Romaji, and English meaning, not IDs or learning progress. Empty decks are valid." />
+                <Label wrapText="true" minHeight="-Infinity"
+                       text="Import reuses matching global vocabulary and keeps its text and progress. Only new vocabulary starts with fresh progress in both modes and is due today. Import rejects invalid or unsupported documents, duplicate vocabulary within the file, and case-insensitive deck-name conflicts without changing your data." />
+                <Label wrapText="true" minHeight="-Infinity"
+                       text="Export applies to the selected deck, including an empty deck. Existing destination files are never overwritten; choose a new filename when one already exists. Canceling either file chooser leaves your data and selection unchanged." />
+            </VBox>
             <VBox spacing="10" minWidth="0">
                 <Label text="Choose a review" styleClass="subsection-title" />
                 <VBox spacing="3" minWidth="0">

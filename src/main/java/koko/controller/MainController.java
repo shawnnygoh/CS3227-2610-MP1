@@ -1,11 +1,16 @@
 package koko.controller;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.nio.charset.CharacterCodingException;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
 
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
@@ -21,12 +26,16 @@ import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.MenuButton;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
+import javafx.stage.FileChooser;
+import javafx.stage.Window;
 import javafx.util.Callback;
 import koko.model.Deck;
 import koko.model.Mode;
@@ -35,6 +44,7 @@ import koko.review.FlashcardSession;
 import koko.review.TypingSession;
 import koko.service.KokoService;
 import koko.storage.StorageException;
+import koko.transfer.DeckTransferException;
 
 /**
  * Thin JavaFX controller for vocabulary and deck management.
@@ -80,6 +90,12 @@ public final class MainController {
     private RadioButton flashcardModeButton;
     @FXML
     private RadioButton typingModeButton;
+    @FXML
+    private MenuButton transferMenuButton;
+    @FXML
+    private MenuItem importDeckMenuItem;
+    @FXML
+    private MenuItem exportSelectedDeckMenuItem;
     @FXML
     private Button editCardButton;
     @FXML
@@ -128,7 +144,8 @@ public final class MainController {
      * @param startupError controlled load error, or null when startup loaded normally.
      * @param clock clock used to establish review session dates.
      * @param controllerFactory factory used when loading the review view.
-     * @throws NullPointerException if an argument is null.
+     * @throws NullPointerException if service, clock, or controllerFactory is null.
+     *         The startupError may be null.
      */
     public MainController(KokoService service, String startupError, Clock clock,
             Callback<Class<?>, Object> controllerFactory) {
@@ -404,6 +421,75 @@ public final class MainController {
                 service.removeCardFromDeck(selectedDeck.id(), selectedCard.id()));
     }
 
+    /**
+     * Imports one portable deck from a user-selected UTF-8 JSON file.
+     *
+     * <p>The service owns parsing, validation, conflict detection, persistence,
+     * and publication. This handler only coordinates the chooser, feedback,
+     * and refreshing the newly published service data.
+     */
+    @FXML
+    private void importDeck() {
+        if (!transferCanRun()) {
+            return;
+        }
+        Path source = chooseImportSource();
+        if (source == null) {
+            return;
+        }
+        try {
+            Deck imported = service.importDeck(source);
+            UUID importedDeckId = imported.id();
+            refreshViews();
+            restoreSelection(deckList, importedDeckId);
+            deckList.scrollTo(deckList.getSelectionModel().getSelectedIndex());
+            setGuidance("Imported and selected the deck. Existing vocabulary kept its progress; "
+                    + "new cards are due today.");
+        } catch (DeckTransferException exception) {
+            String header = isInvalidImportData(exception)
+                    ? "Deck import rejected" : "Deck import could not be read";
+            showTransferError(header, exception.getMessage());
+        } catch (IllegalArgumentException exception) {
+            showTransferError("Deck import conflicts with existing data", exception.getMessage()
+                    + "\n\nChoose a different deck name and try again. No changes were made.");
+        } catch (StorageException exception) {
+            showTransferError("Imported deck was not saved", exception.getMessage()
+                    + "\n\nNo changes were published. Check storage permissions or disk space, "
+                    + "then try again.");
+        }
+    }
+
+    /**
+     * Exports the currently selected deck to a new portable UTF-8 JSON file.
+     *
+     * <p>The selected deck UUID is passed to the service, which resolves current
+     * deck and card data and preserves create-new destination behavior.
+     */
+    @FXML
+    private void exportSelectedDeck() {
+        if (!transferCanRun()) {
+            return;
+        }
+        Deck selected = deckList.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            return;
+        }
+        UUID selectedDeckId = selected.id();
+        Path destination = chooseExportDestination();
+        if (destination == null) {
+            return;
+        }
+        try {
+            service.exportDeck(selectedDeckId, destination);
+            setGuidance("Exported the selected deck as UTF-8 JSON. "
+                    + "IDs and learning progress were not included.");
+        } catch (DeckTransferException exception) {
+            showTransferError("Deck export was not completed", exception.getMessage()
+                    + "\n\nExisting files are never overwritten. Choose a new filename "
+                    + "and try again.");
+        }
+    }
+
     @FXML
     private void showHelp() {
         Parent content;
@@ -428,6 +514,30 @@ public final class MainController {
         help.getDialogPane().setContent(content);
         help.showAndWait();
         setGuidance("Tip: choose a review mode for how to answer, then choose which cards to review.");
+    }
+
+    private Path chooseImportSource() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Import deck");
+        chooser.getExtensionFilters().add(jsonFileFilter());
+        File source = chooser.showOpenDialog(applicationWindow());
+        return source == null ? null : source.toPath();
+    }
+
+    private Path chooseExportDestination() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Export selected deck");
+        chooser.getExtensionFilters().add(jsonFileFilter());
+        File destination = chooser.showSaveDialog(applicationWindow());
+        return destination == null ? null : destination.toPath();
+    }
+
+    private static FileChooser.ExtensionFilter jsonFileFilter() {
+        return new FileChooser.ExtensionFilter("JSON files (*.json)", "*.json");
+    }
+
+    private Window applicationWindow() {
+        return managementRoot.getScene().getWindow();
     }
 
     private void refreshViews() {
@@ -474,6 +584,9 @@ public final class MainController {
         boolean reviewActive = reviewActive();
         flashcardModeButton.setDisable(!storageReady || reviewActive);
         typingModeButton.setDisable(!storageReady || reviewActive);
+        transferMenuButton.setDisable(!storageReady || reviewActive);
+        importDeckMenuItem.setDisable(!storageReady || reviewActive);
+        exportSelectedDeckMenuItem.setDisable(!storageReady || !hasDeck || reviewActive);
         addCardButton.setDisable(!storageReady || reviewActive);
         editCardButton.setDisable(!storageReady || !hasCard || reviewActive);
         deleteCardButton.setDisable(!storageReady || !hasCard || reviewActive);
@@ -486,6 +599,32 @@ public final class MainController {
         removeFromDeckButton.setDisable(!storageReady || !hasDeckCard || reviewActive);
         reviewSelectedCardButton.setDisable(!storageReady || !hasCard || reviewActive);
         reviewDueButton.setDisable(!storageReady || !hasDeck || reviewActive);
+    }
+
+    private boolean transferCanRun() {
+        return startupError == null && !reviewActive();
+    }
+
+    /**
+     * Distinguishes invalid document contents from failures reading the source file.
+     *
+     * <p>The transfer reader wraps format failures and retains parser and encoding
+     * causes, so feedback can distinguish these errors without parsing the file again.
+     *
+     * @param exception contextual failure from the transfer reader.
+     * @return true when the retained cause identifies invalid document contents.
+     */
+    private static boolean isInvalidImportData(DeckTransferException exception) {
+        Throwable cause = exception.getCause();
+        while (cause != null) {
+            if (cause instanceof DeckTransferException
+                    || cause instanceof JsonProcessingException
+                    || cause instanceof CharacterCodingException) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     private CardInput promptCard(VocabularyCard existing, CardInput initialValues) {
@@ -691,6 +830,22 @@ public final class MainController {
         setGuidance(message.replace('\n', ' '));
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle("Koko");
+        alert.setHeaderText(header);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    /**
+     * Shows full failure details in an owned dialog while keeping the Sensei area compact.
+     *
+     * @param header short description of the failed transfer.
+     * @param message detailed failure information, which may include long paths or JSON excerpts.
+     */
+    private void showTransferError(String header, String message) {
+        setGuidance(header + ". Check the file or destination and try again.");
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.initOwner(applicationWindow());
+        alert.setTitle("Koko transfer");
         alert.setHeaderText(header);
         alert.setContentText(message);
         alert.showAndWait();
