@@ -79,7 +79,7 @@ class TypingSessionTest {
                 emptySession.summary());
 
         VocabularyCard future = context.addCard("ねこ", "neko", "cat");
-        setDueDate(future, Mode.TYPING, START_DATE.plusDays(1));
+        setDueDate(context.service, future.id(), Mode.TYPING, START_DATE.plusDays(1));
         Deck futureDeck = context.service.createDeck("Future");
         context.service.addCardToDeck(futureDeck.id(), future.id());
         int savesBefore = context.storage.saveInvocations;
@@ -96,10 +96,10 @@ class TypingSessionTest {
         VocabularyCard yesterday = context.addCard("い", "i", "yesterday");
         VocabularyCard todaySecond = context.addCard("う", "u", "second");
         VocabularyCard tomorrow = context.addCard("え", "e", "tomorrow");
-        setDueDate(todayFirst, Mode.TYPING, START_DATE);
-        setDueDate(yesterday, Mode.TYPING, START_DATE.minusDays(1));
-        setDueDate(todaySecond, Mode.TYPING, START_DATE);
-        setDueDate(tomorrow, Mode.TYPING, START_DATE.plusDays(1));
+        setDueDate(context.service, todayFirst.id(), Mode.TYPING, START_DATE);
+        setDueDate(context.service, yesterday.id(), Mode.TYPING, START_DATE.minusDays(1));
+        setDueDate(context.service, todaySecond.id(), Mode.TYPING, START_DATE);
+        setDueDate(context.service, tomorrow.id(), Mode.TYPING, START_DATE.plusDays(1));
         Deck deck = context.service.createDeck("Core");
         addToDeck(context.service, deck, todayFirst, yesterday, todaySecond, tomorrow);
 
@@ -123,9 +123,9 @@ class TypingSessionTest {
         VocabularyCard first = context.addCard("あ", "a", "first");
         VocabularyCard second = context.addCard("い", "i", "second");
         VocabularyCard third = context.addCard("う", "u", "third");
-        setDueDate(first, Mode.TYPING, START_DATE.plusDays(5));
-        setDueDate(second, Mode.TYPING, START_DATE.minusDays(1));
-        setDueDate(third, Mode.TYPING, START_DATE);
+        setDueDate(context.service, first.id(), Mode.TYPING, START_DATE.plusDays(5));
+        setDueDate(context.service, second.id(), Mode.TYPING, START_DATE.minusDays(1));
+        setDueDate(context.service, third.id(), Mode.TYPING, START_DATE);
         Deck deck = context.service.createDeck("Core");
         addToDeck(context.service, deck, third, first, second);
         int savesBeforeSession = context.storage.saveInvocations;
@@ -156,7 +156,7 @@ class TypingSessionTest {
     void allCardFutureOnlyAndEmptyDecksCompleteWithoutSaving() throws StorageException {
         TestContext context = new TestContext();
         VocabularyCard future = context.addCard("み", "mi", "future");
-        setDueDate(future, Mode.TYPING, START_DATE.plusDays(10));
+        setDueDate(context.service, future.id(), Mode.TYPING, START_DATE.plusDays(10));
         Deck futureDeck = context.service.createDeck("Future");
         context.service.addCardToDeck(futureDeck.id(), future.id());
         int savesBeforeReview = context.storage.saveInvocations;
@@ -183,7 +183,7 @@ class TypingSessionTest {
     void selectedCardIgnoresTypingDueDateAndDeckMembershipAndCanRepeat() throws StorageException {
         TestContext context = new TestContext();
         VocabularyCard card = context.addCard("が", "ga", "sound");
-        setDueDate(card, Mode.TYPING, START_DATE.plusDays(10));
+        setDueDate(context.service, card.id(), Mode.TYPING, START_DATE.plusDays(10));
         int savesBeforeSession = context.storage.saveInvocations;
 
         TypingSession session = TypingSession.forCard(context.service, card.id(), FIXED_CLOCK);
@@ -210,7 +210,7 @@ class TypingSessionTest {
         addToDeck(context.service, deck, first, second);
         TypingSession session = TypingSession.forDeck(context.service, deck.id(), FIXED_CLOCK);
 
-        setDueDate(first, Mode.TYPING, START_DATE.plusDays(5));
+        setDueDate(context.service, first.id(), Mode.TYPING, START_DATE.plusDays(5));
         VocabularyCard third = context.addCard("い", "i", "new");
         context.service.addCardToDeck(deck.id(), third.id());
         context.service.editVocabularyCard(first.id(), "ね", "ne", "updated");
@@ -231,8 +231,8 @@ class TypingSessionTest {
         TypingSession session = TypingSession.forAllCardsInDeck(
                 context.service, deck.id(), FIXED_CLOCK);
 
-        setDueDate(first, Mode.TYPING, START_DATE.plusDays(10));
-        setDueDate(second, Mode.TYPING, START_DATE.plusDays(10));
+        setDueDate(context.service, first.id(), Mode.TYPING, START_DATE.plusDays(10));
+        setDueDate(context.service, second.id(), Mode.TYPING, START_DATE.plusDays(10));
         context.service.addCardToDeck(deck.id(), addedLater.id());
         context.service.removeCardFromDeck(deck.id(), second.id());
         context.service.editVocabularyCard(first.id(), "ね", "ne", "updated");
@@ -348,21 +348,23 @@ class TypingSessionTest {
         TestContext context = new TestContext();
         VocabularyCard first = context.addCard("ね", "ne", "first");
         VocabularyCard second = context.addCard("こ", "ko", "second");
-        first.updateProgress(Mode.TYPING,
+        currentCard(context.service, first.id()).updateProgress(Mode.TYPING,
                 new ModeProgress(2, 3, 1, START_DATE.minusDays(1), START_DATE));
-        second.updateProgress(Mode.TYPING,
+        currentCard(context.service, second.id()).updateProgress(Mode.TYPING,
                 new ModeProgress(3, 5, 2, START_DATE.minusDays(1), START_DATE));
         Deck deck = context.service.createDeck("Words");
         addToDeck(context.service, deck, first, second);
         TypingSession session = TypingSession.forDeck(context.service, deck.id(), FIXED_CLOCK);
         KokoData originalData = context.service.data();
-        ModeProgress original = first.progressFor(Mode.TYPING);
+        VocabularyCard originalCard = currentCard(context.service, first.id());
+        ModeProgress original = originalCard.progressFor(Mode.TYPING);
         int savesBeforeFailure = context.storage.saveInvocations;
         context.storage.failNextSave = true;
 
         assertThrows(StorageException.class, () -> session.submit(first.id(), "ね"));
         assertSame(originalData, context.service.data());
-        assertSame(original, first.progressFor(Mode.TYPING));
+        assertSame(originalCard, currentCard(context.service, first.id()));
+        assertSame(original, originalCard.progressFor(Mode.TYPING));
         assertEquals(TypingSession.State.PROMPT, session.state());
         assertEquals(first.id(), session.currentCardId().orElseThrow());
         assertTrue(session.currentFeedback().isEmpty());
@@ -504,14 +506,15 @@ class TypingSessionTest {
             throws StorageException {
         TestContext context = new TestContext();
         VocabularyCard card = context.addCard("ね", "ne", "root");
-        setDueDate(card, Mode.TYPING, START_DATE.plusDays(10));
+        setDueDate(context.service, card.id(), Mode.TYPING, START_DATE.plusDays(10));
         Deck deck = context.service.createDeck("Words");
         context.service.addCardToDeck(deck.id(), card.id());
         TypingSession session = reviewAll
                 ? TypingSession.forAllCardsInDeck(context.service, deck.id(), FIXED_CLOCK)
                 : TypingSession.forCard(context.service, card.id(), FIXED_CLOCK);
         KokoData originalData = context.service.data();
-        ModeProgress originalProgress = card.progressFor(Mode.TYPING);
+        VocabularyCard originalCard = currentCard(context.service, card.id());
+        ModeProgress originalProgress = originalCard.progressFor(Mode.TYPING);
         TypingSession.Summary originalSummary = session.summary();
         int savesBeforeFailure = context.storage.saveInvocations;
         int successfulSavesBeforeFailure = context.storage.successfulSaveCount;
@@ -519,7 +522,8 @@ class TypingSessionTest {
 
         assertThrows(StorageException.class, () -> session.submit(card.id(), card.hiragana()));
         assertSame(originalData, context.service.data());
-        assertSame(originalProgress, card.progressFor(Mode.TYPING));
+        assertSame(originalCard, currentCard(context.service, card.id()));
+        assertSame(originalProgress, originalCard.progressFor(Mode.TYPING));
         assertEquals(originalSummary, session.summary());
         assertEquals(TypingSession.State.PROMPT, session.state());
         assertEquals(savesBeforeFailure + 1, context.storage.saveInvocations);
@@ -569,10 +573,15 @@ class TypingSessionTest {
         }
     }
 
-    private static void setDueDate(VocabularyCard card, Mode mode, LocalDate dueDate) {
+    private static void setDueDate(KokoService service, UUID cardId, Mode mode, LocalDate dueDate) {
+        VocabularyCard card = service.data().findVocabularyCard(cardId).orElseThrow();
         ModeProgress original = card.progressFor(mode);
         card.updateProgress(mode, new ModeProgress(original.mastery(), original.attempts(),
                 original.correctAttempts(), original.lastReviewedDate(), dueDate));
+    }
+
+    private static VocabularyCard currentCard(KokoService service, UUID cardId) {
+        return service.data().findVocabularyCard(cardId).orElseThrow();
     }
 
     private static void assertProgressEquals(ModeProgress expected, ModeProgress actual) {

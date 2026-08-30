@@ -152,6 +152,8 @@ class KokoServiceTransferTest {
         Deck deck = service.createDeck("Existing");
         service.addCardToDeck(deck.id(), card.id());
         KokoData originalData = service.data();
+        card = service.data().findVocabularyCard(card.id()).orElseThrow();
+        deck = service.data().findDeckById(deck.id()).orElseThrow();
         KokoData originalValues = copyOf(originalData);
         byte[] originalBytes = Files.readAllBytes(storagePath);
         ModeProgress originalProgress = card.progressFor(Mode.FLASHCARD);
@@ -320,15 +322,19 @@ class KokoServiceTransferTest {
         VocabularyCard unrelated = service.addVocabularyCard("そら", "sora", "sky");
         VocabularyCard first = service.addVocabularyCard("ねこ", "neko", "cat");
         VocabularyCard second = service.addVocabularyCard("いぬ", "inu", "dog");
-        first.updateProgress(Mode.FLASHCARD, new ModeProgress(5, 9, 8,
+        service.data().findVocabularyCard(first.id()).orElseThrow().updateProgress(
+                Mode.FLASHCARD, new ModeProgress(5, 9, 8,
                 FIRST_DATE.minusDays(3), FIRST_DATE.plusDays(30)));
-        second.updateProgress(Mode.TYPING, new ModeProgress(3, 4, 2,
+        service.data().findVocabularyCard(second.id()).orElseThrow().updateProgress(
+                Mode.TYPING, new ModeProgress(3, 4, 2,
                 FIRST_DATE.minusDays(2), FIRST_DATE.plusDays(10)));
         Deck deck = service.createDeck("動物 \"\\");
         service.addCardToDeck(deck.id(), second.id());
         service.addCardToDeck(deck.id(), first.id());
         int savesBeforeExport = storage.saveInvocations;
         KokoData dataBeforeExport = service.data();
+        Deck currentDeck = service.data().findDeckById(deck.id()).orElseThrow();
+        VocabularyCard currentFirst = service.data().findVocabularyCard(first.id()).orElseThrow();
         KokoData valuesBeforeExport = copyOf(dataBeforeExport);
         byte[] bytesBeforeExport = Files.readAllBytes(storagePath);
         Path destination = temporaryDirectory.resolve("export with spaces.json");
@@ -337,8 +343,8 @@ class KokoServiceTransferTest {
 
         assertEquals(savesBeforeExport, storage.saveInvocations);
         assertSame(dataBeforeExport, service.data());
-        assertSame(deck, service.data().findDeckById(deck.id()).orElseThrow());
-        assertSame(first, service.data().findVocabularyCard(first.id()).orElseThrow());
+        assertSame(currentDeck, service.data().findDeckById(deck.id()).orElseThrow());
+        assertSame(currentFirst, service.data().findVocabularyCard(first.id()).orElseThrow());
         JsonNode root = new ObjectMapper().readTree(Files.readString(destination,
                 StandardCharsets.UTF_8));
         assertEquals(Set.of("schemaVersion", "deckName", "cards"), fieldNames(root));
@@ -364,8 +370,9 @@ class KokoServiceTransferTest {
             assertFalse(dataBeforeExport.findVocabularyCard(importedCard.id()).isPresent());
             assertFreshProgress(importedCard, FIRST_DATE);
         }
-        for (int index = 0; index < deck.cardIds().size(); index++) {
-            VocabularyCard expected = dataBeforeExport.findVocabularyCard(deck.cardIds().get(index))
+        for (int index = 0; index < currentDeck.cardIds().size(); index++) {
+            VocabularyCard expected = dataBeforeExport
+                    .findVocabularyCard(currentDeck.cardIds().get(index))
                     .orElseThrow();
             VocabularyCard actual = recipient.data().findVocabularyCard(imported.cardIds().get(index))
                     .orElseThrow();

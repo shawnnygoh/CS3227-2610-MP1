@@ -98,9 +98,9 @@ class FlashcardSessionTest {
         VocabularyCard libraryFirst = context.addCard("あ", "a", "first");
         VocabularyCard librarySecond = context.addCard("い", "i", "second");
         VocabularyCard libraryThird = context.addCard("う", "u", "third");
-        setDueDate(libraryFirst, START_DATE.plusDays(5));
-        setDueDate(librarySecond, START_DATE.minusDays(1));
-        setDueDate(libraryThird, START_DATE);
+        setDueDate(context.service, libraryFirst.id(), START_DATE.plusDays(5));
+        setDueDate(context.service, librarySecond.id(), START_DATE.minusDays(1));
+        setDueDate(context.service, libraryThird.id(), START_DATE);
         Deck deck = context.service.createDeck("Core");
         addToDeck(context.service, deck, libraryThird, libraryFirst, librarySecond);
         int savesBeforeSession = context.storage.saveInvocations;
@@ -127,7 +127,7 @@ class FlashcardSessionTest {
             throws StorageException {
         TestContext context = new TestContext();
         VocabularyCard future = context.addCard("み", "mi", "future");
-        setDueDate(future, START_DATE.plusDays(10));
+        setDueDate(context.service, future.id(), START_DATE.plusDays(10));
         Deck futureDeck = context.service.createDeck("Future");
         context.service.addCardToDeck(futureDeck.id(), future.id());
         FlashcardSession futureSession = FlashcardSession.forAllCardsInDeck(
@@ -157,10 +157,10 @@ class FlashcardSessionTest {
         VocabularyCard yesterday = context.addCard("い", "i", "i");
         VocabularyCard todaySecond = context.addCard("う", "u", "u");
         VocabularyCard tomorrow = context.addCard("え", "e", "e");
-        setDueDate(todayFirst, START_DATE);
-        setDueDate(yesterday, START_DATE.minusDays(1));
-        setDueDate(todaySecond, START_DATE);
-        setDueDate(tomorrow, START_DATE.plusDays(1));
+        setDueDate(context.service, todayFirst.id(), START_DATE);
+        setDueDate(context.service, yesterday.id(), START_DATE.minusDays(1));
+        setDueDate(context.service, todaySecond.id(), START_DATE);
+        setDueDate(context.service, tomorrow.id(), START_DATE.plusDays(1));
         Deck deck = context.service.createDeck("Core");
         addToDeck(context.service, deck, todayFirst, yesterday, todaySecond, tomorrow);
         int savesBeforeSession = context.storage.saveInvocations;
@@ -185,7 +185,7 @@ class FlashcardSessionTest {
     void selectedGlobalCardIgnoresDueDateAndDeckMembership() throws StorageException {
         TestContext context = new TestContext();
         VocabularyCard unassignedTomorrow = context.addCard("そ", "so", "so");
-        setDueDate(unassignedTomorrow, START_DATE.plusDays(1));
+        setDueDate(context.service, unassignedTomorrow.id(), START_DATE.plusDays(1));
 
         FlashcardSession session = FlashcardSession.forCard(
                 context.service, unassignedTomorrow.id(), FIXED_CLOCK);
@@ -208,7 +208,7 @@ class FlashcardSessionTest {
         FlashcardSession session = FlashcardSession.forDeck(
                 context.service, deck.id(), FIXED_CLOCK);
 
-        setDueDate(first, START_DATE.plusDays(10));
+        setDueDate(context.service, first.id(), START_DATE.plusDays(10));
         VocabularyCard third = context.addCard("い", "i", "new");
         context.service.addCardToDeck(deck.id(), third.id());
         context.service.editVocabularyCard(first.id(), "ねー", "ne", "updated");
@@ -421,7 +421,7 @@ class FlashcardSessionTest {
         Clock clock = source.withZone(ZoneId.of("Asia/Singapore"));
         TestContext context = new TestContext(clock);
         VocabularyCard card = context.addCard("ね", "ne", "root");
-        setDueDate(card, START_DATE);
+        setDueDate(context.service, card.id(), START_DATE);
         Deck deck = context.service.createDeck("Core");
         context.service.addCardToDeck(deck.id(), card.id());
         FlashcardSession session = FlashcardSession.forDeck(context.service, deck.id(), clock);
@@ -450,10 +450,10 @@ class FlashcardSessionTest {
                 START_DATE.minusDays(2), START_DATE.plusDays(5));
         ModeProgress incorrectTyping = new ModeProgress(3, 5, 4,
                 START_DATE.minusDays(3), START_DATE.plusDays(6));
-        correct.updateProgress(Mode.TYPING, correctTyping);
-        incorrect.updateProgress(Mode.TYPING, incorrectTyping);
-        setDueDate(correct, START_DATE.plusDays(20));
-        setDueDate(incorrect, START_DATE.plusDays(20));
+        currentCard(context.service, correct.id()).updateProgress(Mode.TYPING, correctTyping);
+        currentCard(context.service, incorrect.id()).updateProgress(Mode.TYPING, incorrectTyping);
+        setDueDate(context.service, correct.id(), START_DATE.plusDays(20));
+        setDueDate(context.service, incorrect.id(), START_DATE.plusDays(20));
         Deck deck = context.service.createDeck("Early");
         addToDeck(context.service, deck, correct, incorrect);
         FlashcardSession session = FlashcardSession.forAllCardsInDeck(
@@ -642,9 +642,9 @@ class FlashcardSessionTest {
      */
     private static FlashcardSession createDeckSession(TestContext context, Deck deck, boolean reviewAll) {
         if (reviewAll) {
-            for (UUID cardId : deck.cardIds()) {
-                setDueDate(context.service.data().findVocabularyCard(cardId).orElseThrow(),
-                        START_DATE.plusDays(10));
+            Deck currentDeck = context.service.data().findDeckById(deck.id()).orElseThrow();
+            for (UUID cardId : currentDeck.cardIds()) {
+                setDueDate(context.service, cardId, START_DATE.plusDays(10));
             }
             return FlashcardSession.forAllCardsInDeck(context.service, deck.id(), FIXED_CLOCK);
         }
@@ -658,10 +658,15 @@ class FlashcardSessionTest {
         }
     }
 
-    private static void setDueDate(VocabularyCard card, LocalDate dueDate) {
+    private static void setDueDate(KokoService service, UUID cardId, LocalDate dueDate) {
+        VocabularyCard card = service.data().findVocabularyCard(cardId).orElseThrow();
         ModeProgress original = card.progressFor(Mode.FLASHCARD);
         card.updateProgress(Mode.FLASHCARD, new ModeProgress(original.mastery(), original.attempts(),
                 original.correctAttempts(), original.lastReviewedDate(), dueDate));
+    }
+
+    private static VocabularyCard currentCard(KokoService service, UUID cardId) {
+        return service.data().findVocabularyCard(cardId).orElseThrow();
     }
 
     private static void assertProgressEquals(ModeProgress expected, ModeProgress actual) {

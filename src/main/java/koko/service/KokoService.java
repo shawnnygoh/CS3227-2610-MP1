@@ -25,8 +25,12 @@ import koko.transfer.PortableDeck;
  * Application service for the current Koko data set.
  *
  * <p>The service keeps domain operations together with their persistence
- * boundary. A successful mutation is saved exactly once. If saving fails,
- * the in-memory mutation is rolled back.
+ * boundary. A successful mutation is applied to a detached candidate, saved
+ * exactly once, and published only after saving succeeds.
+ *
+ * <p>Callers must treat the state returned by {@link #data()} as read-only and
+ * perform changes through this service. Successful publication may replace
+ * cards, decks, and their containing aggregate, while retaining their UUIDs.
  */
 public final class KokoService {
 
@@ -59,7 +63,13 @@ public final class KokoService {
     }
 
     /**
-     * Returns the current domain state.
+     * Returns the current domain state for read-only access.
+     *
+     * <p>The returned aggregate and its domain objects may become stale after
+     * any successful service operation. Callers must not mutate exposed cards,
+     * decks, or collections directly; they should retain UUIDs and reacquire
+     * current objects from a later call to this method. Successful operations
+     * do not promise to preserve Java object identity.
      *
      * @return current vocabulary and deck state.
      */
@@ -328,18 +338,32 @@ public final class KokoService {
         data = candidate;
     }
 
+    /**
+     * Applies one management operation to a detached candidate and publishes it after saving.
+     *
+     * <p>Validation and operation failures discard the candidate without changing current
+     * state. A storage failure likewise leaves current state and all previously exposed
+     * references untouched. The result is returned from the candidate that is published.
+     *
+     * @param operation management operation to apply to the candidate.
+     * @param <T> operation result type.
+     * @return the operation result from the published candidate.
+     * @throws StorageException if the candidate cannot be persisted.
+     */
     private <T> T mutate(Function<KokoData, T> operation) throws StorageException {
-        KokoData original = copyOf(data);
-        try {
-            T result = operation.apply(data);
-            storage.save(data);
-            return result;
-        } catch (StorageException | RuntimeException exception) {
-            data = original;
-            throw exception;
-        }
+        KokoData candidate = copyOf(data);
+        T result = operation.apply(candidate);
+        storage.save(candidate);
+        data = candidate;
+        return result;
     }
 
+    /**
+     * Creates a detached deep copy of the complete aggregate, including both progress records.
+     *
+     * @param source aggregate to copy.
+     * @return detached aggregate with the same UUIDs, values, order, memberships, and progress.
+     */
     private static KokoData copyOf(KokoData source) {
         List<VocabularyCard> cards = new ArrayList<>();
         for (VocabularyCard card : source.vocabularyCards()) {
@@ -353,6 +377,12 @@ public final class KokoService {
         return KokoData.restore(cards, decks);
     }
 
+    /**
+     * Copies one immutable progress record for use in a detached aggregate.
+     *
+     * @param progress progress record to copy.
+     * @return equivalent independent progress record.
+     */
     private static ModeProgress copyProgress(ModeProgress progress) {
         return new ModeProgress(progress.mastery(), progress.attempts(),
                 progress.correctAttempts(), progress.lastReviewedDate(), progress.nextDueDate());
