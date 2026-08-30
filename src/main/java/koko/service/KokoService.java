@@ -1,5 +1,6 @@
 package koko.service;
 
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -15,6 +16,10 @@ import koko.model.ModeProgress;
 import koko.model.VocabularyCard;
 import koko.storage.Storage;
 import koko.storage.StorageException;
+import koko.transfer.DeckTransfer;
+import koko.transfer.DeckTransferException;
+import koko.transfer.PortableCard;
+import koko.transfer.PortableDeck;
 
 /**
  * Application service for the current Koko data set.
@@ -27,6 +32,7 @@ public final class KokoService {
 
     private final Storage storage;
     private final Clock clock;
+    private final DeckTransfer deckTransfer;
     private KokoData data;
 
     /**
@@ -39,6 +45,7 @@ public final class KokoService {
     public KokoService(Storage storage, Clock clock) {
         this.storage = Objects.requireNonNull(storage, "Storage cannot be null");
         this.clock = Objects.requireNonNull(clock, "Clock cannot be null");
+        deckTransfer = new DeckTransfer();
         data = new KokoData();
     }
 
@@ -58,6 +65,72 @@ public final class KokoService {
      */
     public KokoData data() {
         return data;
+    }
+
+    /**
+     * Imports one portable deck as a single transactional application mutation.
+     *
+     * <p>The document is fully parsed and validated before the service samples
+     * the import date or changes a detached candidate. Existing global cards are
+     * matched by the domain identity and retain their text, UUID, memberships,
+     * and both progress records.
+     *
+     * @param source source portable JSON file.
+     * @return the newly created deck.
+     * @throws DeckTransferException if the source cannot be read or violates the
+     *         portable format.
+     * @throws IllegalArgumentException if the deck name conflicts with an existing
+     *         deck.
+     * @throws StorageException if the complete candidate cannot be persisted.
+     * @throws NullPointerException if source is null.
+     */
+    public Deck importDeck(Path source) throws DeckTransferException, StorageException {
+        PortableDeck document = deckTransfer.read(source);
+        LocalDate importDate = LocalDate.now(clock);
+        KokoData candidate = copyOf(data);
+        List<UUID> resolvedCardIds = new ArrayList<>();
+        for (PortableCard portableCard : document.cards()) {
+            VocabularyCard card = candidate.findVocabularyCardByIdentity(
+                    portableCard.hiragana(), portableCard.englishMeaning()).orElse(null);
+            if (card == null) {
+                card = candidate.addVocabularyCard(portableCard.hiragana(), portableCard.romaji(),
+                        portableCard.englishMeaning(), importDate);
+            }
+            resolvedCardIds.add(card.id());
+        }
+        Deck importedDeck = candidate.createDeck(document.deckName());
+        for (UUID cardId : resolvedCardIds) {
+            candidate.addCardToDeck(importedDeck.id(), cardId);
+        }
+        storage.save(candidate);
+        data = candidate;
+        return importedDeck;
+    }
+
+    /**
+     * Exports one current deck to a new portable JSON file.
+     *
+     * <p>Membership order is taken from the deck while card text is resolved
+     * from the current global library. Export does not persist or otherwise
+     * mutate application state.
+     *
+     * @param deckId deck to export.
+     * @param destination new destination JSON file.
+     * @throws DeckTransferException if serialization or destination writing fails.
+     * @throws IllegalArgumentException if deckId is unknown.
+     * @throws NullPointerException if deckId or destination is null.
+     */
+    public void exportDeck(UUID deckId, Path destination) throws DeckTransferException {
+        Deck deck = data.findDeckById(deckId)
+                .orElseThrow(() -> new IllegalArgumentException("Deck does not exist"));
+        List<PortableCard> cards = deck.cardIds().stream()
+                .map(cardId -> data.findVocabularyCard(cardId).orElseThrow(() ->
+                        new IllegalStateException("Deck references an unknown card")))
+                .map(card -> new PortableCard(card.hiragana(), card.romaji(),
+                        card.englishMeaning()))
+                .toList();
+        deckTransfer.write(new PortableDeck(DeckTransfer.CURRENT_SCHEMA_VERSION, deck.name(), cards),
+                destination);
     }
 
     /**

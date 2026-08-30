@@ -101,7 +101,7 @@ public final class VocabularyCard {
      * @throws IllegalArgumentException if a field is blank or uses invalid characters.
      * @throws NullPointerException if a field is null.
      */
-    static void validateContent(String hiragana, String romaji, String englishMeaning) {
+    public static void validateContent(String hiragana, String romaji, String englishMeaning) {
         Objects.requireNonNull(hiragana, "Hiragana cannot be null");
         Objects.requireNonNull(romaji, "Romaji cannot be null");
         Objects.requireNonNull(englishMeaning, "English meaning cannot be null");
@@ -117,6 +117,31 @@ public final class VocabularyCard {
         if (!errors.isEmpty()) {
             throw new IllegalArgumentException(String.join("; ", errors));
         }
+    }
+
+    /**
+     * Returns whether two vocabulary entries have the same domain identity.
+     *
+     * <p>Identity uses normalized Hiragana and normalized English meaning,
+     * ignoring English letter case. Romaji is deliberately not part of the
+     * identity.
+     *
+     * @param firstHiragana Hiragana from the first entry.
+     * @param firstEnglishMeaning English meaning from the first entry.
+     * @param secondHiragana Hiragana from the second entry.
+     * @param secondEnglishMeaning English meaning from the second entry.
+     * @return true when both entries have the same identity.
+     * @throws IllegalArgumentException if a supplied identity field is blank.
+     * @throws NullPointerException if a supplied identity field is null.
+     */
+    public static boolean sameIdentity(String firstHiragana, String firstEnglishMeaning,
+            String secondHiragana, String secondEnglishMeaning) {
+        String normalizedFirstHiragana = normalizeHiragana(firstHiragana);
+        String normalizedFirstMeaning = normalizeEnglishMeaning(firstEnglishMeaning);
+        String normalizedSecondHiragana = normalizeHiragana(secondHiragana);
+        String normalizedSecondMeaning = normalizeEnglishMeaning(secondEnglishMeaning);
+        return normalizedFirstHiragana.equals(normalizedSecondHiragana)
+                && normalizedFirstMeaning.equalsIgnoreCase(normalizedSecondMeaning);
     }
 
     private static void addValidationError(List<String> errors, String fieldName, String value,

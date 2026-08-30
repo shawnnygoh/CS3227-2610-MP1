@@ -61,7 +61,7 @@ public final class Deck {
      * @throws NullPointerException if newName is null.
      */
     void rename(String newName) {
-        name = requireNonBlank(newName, "Deck name");
+        name = normalizeName(newName);
     }
 
     /**
@@ -103,6 +103,18 @@ public final class Deck {
 
     boolean containsCard(UUID cardId) {
         return cardIds.contains(cardId);
+    }
+
+    /**
+     * Trims and validates a deck name using the domain's name rule.
+     *
+     * @param value deck name to normalize.
+     * @return the trimmed deck name.
+     * @throws IllegalArgumentException if the name is blank.
+     * @throws NullPointerException if value is null.
+     */
+    public static String normalizeName(String value) {
+        return requireNonBlank(value, "Deck name");
     }
 
     private static String requireNonBlank(String value, String fieldName) {

@@ -43,6 +43,38 @@ class KokoDataTest {
     }
 
     @Test
+    void lookupByIdentityFindsUnassignedAndSharedGlobalCards() {
+        KokoData data = new KokoData();
+        VocabularyCard card = data.addVocabularyCard("ねこ", "neko", "cat", CREATION_DATE);
+        VocabularyCard shared = data.addVocabularyCard("が", "ga", "café", CREATION_DATE);
+        Deck first = data.createDeck("First");
+        Deck second = data.createDeck("Second");
+        data.addCardToDeck(first.id(), shared.id());
+        data.addCardToDeck(second.id(), shared.id());
+
+        assertSame(card, data.findVocabularyCardByIdentity("  ねこ  ", "CAT").orElseThrow());
+        assertSame(shared, data.findVocabularyCardByIdentity("か\u3099", " CAFE\u0301 ")
+                .orElseThrow());
+        assertTrue(data.findVocabularyCardByIdentity("いぬ", "dog").isEmpty());
+    }
+
+    @Test
+    void lookupValidatesIdentityEvenWhenTheLibraryIsEmpty() {
+        KokoData populated = new KokoData();
+        populated.addVocabularyCard("ねこ", "neko", "cat", CREATION_DATE);
+        for (KokoData data : List.of(new KokoData(), populated)) {
+            assertThrows(NullPointerException.class, () ->
+                    data.findVocabularyCardByIdentity(null, "cat"));
+            assertThrows(NullPointerException.class, () ->
+                    data.findVocabularyCardByIdentity("いぬ", null));
+            assertThrows(IllegalArgumentException.class, () ->
+                    data.findVocabularyCardByIdentity(" ", "cat"));
+            assertThrows(IllegalArgumentException.class, () ->
+                    data.findVocabularyCardByIdentity("いぬ", " "));
+        }
+    }
+
+    @Test
     void editingToCanonicallyEquivalentMeaningIsRejectedAsDuplicate() {
         KokoData data = new KokoData();
         VocabularyCard existing = data.addVocabularyCard("ねこ", "neko", "café", CREATION_DATE);

@@ -1,6 +1,7 @@
 package koko.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -46,6 +47,33 @@ class VocabularyCardTest {
                 "coffee", CREATION_DATE);
 
         assertEquals("kōhī", card.romaji());
+    }
+
+    @Test
+    void identityUsesNormalizedHiraganaAndCaseInsensitiveMeaningButNotRomaji() {
+        assertTrue(VocabularyCard.sameIdentity("  か\u3099  ", "Cat",
+                "が", " cat "));
+        assertFalse(VocabularyCard.sameIdentity("が", "cat", "が", "kitten"));
+    }
+
+    @Test
+    void identityValidatesBothMeaningsEvenWhenHiraganaDiffers() {
+        assertThrows(NullPointerException.class, () ->
+                VocabularyCard.sameIdentity("ねこ", null, "いぬ", "dog"));
+        assertThrows(NullPointerException.class, () ->
+                VocabularyCard.sameIdentity("ねこ", "cat", "いぬ", null));
+        assertThrows(IllegalArgumentException.class, () ->
+                VocabularyCard.sameIdentity("ねこ", " ", "いぬ", "dog"));
+        assertThrows(IllegalArgumentException.class, () ->
+                VocabularyCard.sameIdentity("ねこ", "cat", "いぬ", " "));
+    }
+
+    @Test
+    void cardValidationRejectsJsonQuoteAndBackslashCharacters() {
+        assertThrows(IllegalArgumentException.class, () ->
+                VocabularyCard.validateContent("ねこ", "ne\"ko", "cat"));
+        assertThrows(IllegalArgumentException.class, () ->
+                VocabularyCard.validateContent("ねこ", "neko", "cat\\"));
     }
 
     @Test

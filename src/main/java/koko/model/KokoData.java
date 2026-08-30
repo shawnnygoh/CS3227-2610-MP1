@@ -147,8 +147,8 @@ public final class KokoData {
         String normalizedHiragana = VocabularyCard.normalizeHiragana(newHiragana);
         String normalizedMeaning = VocabularyCard.normalizeEnglishMeaning(newEnglishMeaning);
         boolean duplicate = vocabularyCards.stream().anyMatch(existing -> existing != card
-                && existing.hiragana().equals(normalizedHiragana)
-                && existing.englishMeaning().equalsIgnoreCase(normalizedMeaning));
+                && VocabularyCard.sameIdentity(existing.hiragana(), existing.englishMeaning(),
+                        normalizedHiragana, normalizedMeaning));
         if (duplicate) {
             throw new IllegalArgumentException("Vocabulary card is already in the global library");
         }
@@ -209,6 +209,25 @@ public final class KokoData {
     }
 
     /**
+     * Finds a globally stored card by the domain's normalized vocabulary identity.
+     *
+     * @param hiragana Hiragana identity field.
+     * @param englishMeaning English meaning identity field.
+     * @return matching card, or empty when no card has that identity.
+     * @throws IllegalArgumentException if an identity field is blank.
+     * @throws NullPointerException if an identity field is null.
+     */
+    public java.util.Optional<VocabularyCard> findVocabularyCardByIdentity(String hiragana,
+            String englishMeaning) {
+        String normalizedHiragana = VocabularyCard.normalizeHiragana(hiragana);
+        String normalizedMeaning = VocabularyCard.normalizeEnglishMeaning(englishMeaning);
+        return vocabularyCards.stream()
+                .filter(card -> VocabularyCard.sameIdentity(card.hiragana(),
+                        card.englishMeaning(), normalizedHiragana, normalizedMeaning))
+                .findFirst();
+    }
+
+    /**
      * Finds an owned deck.
      *
      * @param deckId deck ID to find.
@@ -238,9 +257,9 @@ public final class KokoData {
     }
 
     private void ensureVocabularyIsUnique(VocabularyCard candidate) {
-        boolean duplicate = vocabularyCards.stream().anyMatch(existing ->
-                existing.hiragana().equals(candidate.hiragana())
-                        && existing.englishMeaning().equalsIgnoreCase(candidate.englishMeaning()));
+        boolean duplicate = vocabularyCards.stream().anyMatch(existing -> VocabularyCard.sameIdentity(
+                existing.hiragana(), existing.englishMeaning(), candidate.hiragana(),
+                candidate.englishMeaning()));
         if (duplicate) {
             throw new IllegalArgumentException("Vocabulary card is already in the global library");
         }
