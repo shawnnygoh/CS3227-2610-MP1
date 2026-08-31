@@ -40,8 +40,9 @@ Ensure that Java 25 is used when running the application or build tasks. On macO
 Run commands from the repository root using the Gradle wrapper.
 
 * `./gradlew check` runs tests and Checkstyle. For focused tests, use `./gradlew test --tests koko.service.KokoServiceTest`, substituting the relevant test class.
-* `./gradlew shadowJar` builds `build/libs/koko.jar`; `java -jar build/libs/koko.jar` launches it. Use `./gradlew run` for a development launch.
-* Add or update tests with behavior changes. Before handing off code changes, run `./gradlew check`; rebuild the JAR when production code, resources, or build configuration changes. Use `./gradlew clean check shadowJar` for a clean verification run.
+* `./gradlew shadowJar` builds `build/libs/koko.jar` for the current platform; `java -jar build/libs/koko.jar` launches it. Use `./gradlew run` for a development launch.
+* `./gradlew releaseJar` rebuilds the cross-platform `release/koko.jar`.
+* Add or update tests with behavior changes. Before handing off code changes, run `./gradlew check`; rebuild both JARs and commit the refreshed `release/koko.jar` when production code, resources, or build configuration changes. Use `./gradlew clean check shadowJar releaseJar` for a clean verification run.
 * Review the diff and run `git diff --check`. Documentation-only changes do not require application tests.
 * Testing the GUI should be left to the developer.
 

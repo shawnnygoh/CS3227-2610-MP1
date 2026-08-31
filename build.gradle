@@ -13,8 +13,16 @@ application {
     mainClass = 'koko.Launcher'
 }
 
+def javafxVersion = '25'
+def jacksonVersion = '2.19.2'
+def javafxModules = [ 'base', 'graphics', 'controls', 'fxml' ]
+
+// The release JAR covers Windows x64, Apple Silicon macOS, and
+// x64 Linux; other machines can build locally or use a JavaFX-enabled JDK.
+def releasePlatforms = [ 'win', 'mac-aarch64', 'linux' ]
+
 javafx {
-    version = '25'
+    version = javafxVersion
     modules = [ 'javafx.controls', 'javafx.fxml' ]
 }
 
@@ -22,10 +30,26 @@ checkstyle {
     toolVersion = '11.0.0'
 }
 
+configurations {
+    releaseRuntime
+}
+
 dependencies {
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.19.2'
+    implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
     testImplementation 'org.junit.jupiter:junit-jupiter:5.14.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.14.1'
+
+    releaseRuntime "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+}
+
+// Each platform gets its own configuration
+def javafxReleaseConfigurations = releasePlatforms.collect { platform ->
+    def configuration = configurations.create("javafx${platform.replaceAll('[^a-zA-Z0-9]', '')}")
+    javafxModules.each { module ->
+        dependencies.add(configuration.name,
+                "org.openjfx:javafx-${module}:${javafxVersion}:${platform}@jar")
+    }
+    configuration
 }
 
 tasks.named('test') {
@@ -34,6 +58,20 @@ tasks.named('test') {
 
 shadowJar {
     archiveFileName = 'koko.jar'
+}
+
+// Cross-platform distribution JAR
+tasks.register('releaseJar', com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+    group = 'distribution'
+    description = 'Packages release/koko.jar with JavaFX for Windows, macOS, and Linux.'
+    archiveFileName = 'koko.jar'
+    destinationDirectory = layout.projectDirectory.dir('release')
+    from sourceSets.main.output
+    configurations = [ project.configurations.releaseRuntime ] + javafxReleaseConfigurations
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes 'Main-Class': application.mainClass
+    }
 }
 
 java {
