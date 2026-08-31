@@ -18,9 +18,13 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import koko.model.Deck;
 import koko.model.KokoData;
@@ -80,106 +84,150 @@ class KokoServiceTest {
     }
 
     @Test
-    void managementMutationsPublishSavedCandidatesAndPreserveDomainValues()
+    void createdCardsAndDecksAreThePublishedInstances() throws StorageException {
+        KokoService service = new KokoService(new FakeStorage(), FIXED_CLOCK);
+
+        // Each result is the published instance only until the next mutation copies
+        // the aggregate, so every check has to follow its own create.
+        VocabularyCard first = service.addVocabularyCard("ねこ", "neko", "cat");
+        assertSame(first, currentCard(service, first.id()));
+
+        VocabularyCard second = service.addVocabularyCard("いぬ", "inu", "dog");
+        assertSame(second, currentCard(service, second.id()));
+
+        Deck firstDeck = service.createDeck("First");
+        assertSame(firstDeck, currentDeck(service, firstDeck.id()));
+
+        Deck secondDeck = service.createDeck("Second");
+        assertSame(secondDeck, currentDeck(service, secondDeck.id()));
+    }
+
+    @Test
+    void membershipKeepsInsertionOrderWithinEachDeck() throws StorageException {
+        KokoService service = new KokoService(new FakeStorage(), FIXED_CLOCK);
+        VocabularyCard first = service.addVocabularyCard("ねこ", "neko", "cat");
+        VocabularyCard second = service.addVocabularyCard("いぬ", "inu", "dog");
+        Deck firstDeck = service.createDeck("First");
+        Deck secondDeck = service.createDeck("Second");
+
+        service.addCardToDeck(firstDeck.id(), first.id());
+        service.addCardToDeck(firstDeck.id(), second.id());
+        service.addCardToDeck(secondDeck.id(), first.id());
+
+        assertEquals(List.of(first.id(), second.id()),
+                currentDeck(service, firstDeck.id()).cardIds());
+        assertEquals(List.of(first.id()), currentDeck(service, secondDeck.id()).cardIds());
+    }
+
+    @Test
+    void successfulMutationReplacesTheAffectedDomainObject() throws StorageException {
+        KokoService service = new KokoService(new FakeStorage(), FIXED_CLOCK);
+        VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
+        VocabularyCard beforeEdit = currentCard(service, card.id());
+
+        service.editVocabularyCard(card.id(), "ねこ", "neko-2", "animal");
+
+        assertNotSame(beforeEdit, currentCard(service, card.id()));
+        assertEquals(card.id(), currentCard(service, card.id()).id());
+    }
+
+    @Test
+    void everySavedCandidateIsDetachedAndThePublishedStateIsTheSavedOne()
             throws StorageException {
         FakeStorage storage = new FakeStorage();
         KokoService service = new KokoService(storage, FIXED_CLOCK);
         storage.observedService = service;
 
-        VocabularyCard first = service.addVocabularyCard("ねこ", "neko", "cat");
-        assertSame(first, service.data().findVocabularyCard(first.id()).orElseThrow());
-        VocabularyCard second = service.addVocabularyCard("いぬ", "inu", "dog");
-        assertSame(second, currentCard(service, second.id()));
-        Deck firstDeck = service.createDeck("First");
-        assertSame(firstDeck, currentDeck(service, firstDeck.id()));
-        Deck secondDeck = service.createDeck("Second");
-        assertSame(secondDeck, currentDeck(service, secondDeck.id()));
-        service.addCardToDeck(firstDeck.id(), first.id());
-        service.addCardToDeck(firstDeck.id(), second.id());
-        service.addCardToDeck(secondDeck.id(), first.id());
-        assertEquals(List.of(first.id(), second.id()), currentDeck(service, firstDeck.id()).cardIds());
+        // Every mutation runs under the observer, which is the only check on ordering
+        // during save. An operation left out here could publish before saving and
+        // restore on failure while still passing every after-the-fact assertion.
+        VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
+        Deck deck = service.createDeck("First");
+        service.addCardToDeck(deck.id(), card.id());
+        service.editVocabularyCard(card.id(), "ねこ", "neko-2", "animal");
+        service.renameDeck(deck.id(), "Renamed");
+        service.removeCardFromDeck(deck.id(), card.id());
+        service.deleteDeck(deck.id());
+        service.deleteVocabularyCard(card.id());
 
-        VocabularyCard currentFirst = service.data().findVocabularyCard(first.id()).orElseThrow();
-        ModeProgress flashcard = new ModeProgress(3, 4, 3,
-                CREATION_DATE.minusDays(1), CREATION_DATE.plusDays(5));
-        ModeProgress typing = new ModeProgress(2, 3, 2,
-                CREATION_DATE.minusDays(2), CREATION_DATE.plusDays(3));
-        currentFirst.updateProgress(Mode.FLASHCARD, flashcard);
-        currentFirst.updateProgress(Mode.TYPING, typing);
-
-        service.editVocabularyCard(first.id(), "ねこ", "neko-2", "animal");
-        VocabularyCard edited = service.data().findVocabularyCard(first.id()).orElseThrow();
-        assertNotSame(currentFirst, edited);
-        assertProgressEquals(flashcard, edited.progressFor(Mode.FLASHCARD));
-        assertProgressEquals(typing, edited.progressFor(Mode.TYPING));
-
-        service.renameDeck(firstDeck.id(), "Renamed");
-        service.removeCardFromDeck(firstDeck.id(), second.id());
-        service.deleteDeck(secondDeck.id());
-        service.deleteVocabularyCard(first.id());
-
-        assertEquals(12, storage.saveInvocations);
+        assertEquals(8, storage.saveInvocations);
         assertTrue(storage.allSavedCandidatesWereDetached);
         assertSame(storage.lastSavedData, service.data());
-        assertTrue(service.data().findVocabularyCard(first.id()).isEmpty());
-        assertTrue(service.data().findDeckById(secondDeck.id()).isEmpty());
-        Deck remainingDeck = service.data().findDeckById(firstDeck.id()).orElseThrow();
-        assertEquals("Renamed", remainingDeck.name());
-        assertTrue(remainingDeck.cardIds().isEmpty());
-        assertTrue(service.data().findVocabularyCard(second.id()).isPresent());
+        assertTrue(service.data().vocabularyCards().isEmpty());
+        assertTrue(service.data().decks().isEmpty());
     }
 
-    @Test
-    void validationFailuresDoNotSaveOrReplaceCurrentState() throws StorageException {
+    @ParameterizedTest(name = "rejects {0}")
+    @MethodSource("rejectedManagementOperations")
+    void rejectedManagementOperationDoesNotSaveOrReplaceCurrentState(String name,
+            Class<? extends Throwable> expected, RejectedOperation operation)
+            throws StorageException {
         FakeStorage storage = new FakeStorage();
         KokoService service = new KokoService(storage, FIXED_CLOCK);
         VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
         Deck deck = service.createDeck("Animals");
         Deck otherDeck = service.createDeck("Other");
         service.addCardToDeck(deck.id(), card.id());
+        Fixture fixture = new Fixture(service, card, deck);
         KokoData originalData = service.data();
         KokoData originalValues = KokoDataSnapshots.copyOf(originalData);
-        VocabularyCard originalCard = service.data().findVocabularyCard(card.id()).orElseThrow();
-        Deck originalDeck = service.data().findDeckById(deck.id()).orElseThrow();
-        Deck originalOtherDeck = service.data().findDeckById(otherDeck.id()).orElseThrow();
+        VocabularyCard originalCard = currentCard(service, card.id());
+        Deck originalDeck = currentDeck(service, deck.id());
+        Deck originalOtherDeck = currentDeck(service, otherDeck.id());
         int savesBefore = storage.saveInvocations;
 
-        assertThrows(IllegalArgumentException.class, () ->
-                service.addVocabularyCard("ねこ", "other", "CAT"));
-        assertThrows(IllegalArgumentException.class, () ->
-                service.editVocabularyCard(card.id(), " ", "neko", "cat"));
-        assertThrows(IllegalArgumentException.class, () ->
-                service.editVocabularyCard(UUID.randomUUID(), "ねこ", "neko", "cat"));
-        assertThrows(IllegalArgumentException.class, () ->
-                service.deleteVocabularyCard(UUID.randomUUID()));
-        assertThrows(IllegalArgumentException.class, () -> service.createDeck(" animals "));
-        assertThrows(IllegalArgumentException.class, () ->
-                service.renameDeck(deck.id(), " "));
-        assertThrows(IllegalArgumentException.class, () ->
-                service.renameDeck(deck.id(), " other "));
-        assertThrows(IllegalArgumentException.class, () -> service.renameDeck(UUID.randomUUID(), "New"));
-        assertThrows(IllegalArgumentException.class, () -> service.deleteDeck(UUID.randomUUID()));
-        assertThrows(IllegalArgumentException.class, () ->
-                service.addCardToDeck(deck.id(), card.id()));
-        assertThrows(IllegalArgumentException.class, () ->
-                service.addCardToDeck(UUID.randomUUID(), card.id()));
-        assertThrows(IllegalArgumentException.class, () ->
-                service.removeCardFromDeck(deck.id(), UUID.randomUUID()));
-        assertThrows(IllegalArgumentException.class, () ->
-                service.removeCardFromDeck(UUID.randomUUID(), card.id()));
-        assertThrows(NullPointerException.class, () -> service.createDeck(null));
-        assertThrows(NullPointerException.class, () -> service.editVocabularyCard(card.id(), null, "neko", "cat"));
+        assertThrows(expected, () -> operation.run(fixture));
 
         assertEquals(savesBefore, storage.saveInvocations);
         assertSame(originalData, service.data());
         assertDataEquals(originalValues, service.data());
-        assertSame(originalCard, service.data().findVocabularyCard(card.id()).orElseThrow());
-        assertSame(originalDeck, service.data().findDeckById(deck.id()).orElseThrow());
-        assertSame(originalOtherDeck, service.data().findDeckById(otherDeck.id()).orElseThrow());
+        assertSame(originalCard, currentCard(service, card.id()));
+        assertSame(originalDeck, currentDeck(service, deck.id()));
+        assertSame(originalOtherDeck, currentDeck(service, otherDeck.id()));
         assertEquals(List.of(card.id()), originalDeck.cardIds());
         assertEquals("ねこ", originalCard.hiragana());
         assertEquals("neko", originalCard.romaji());
         assertEquals("cat", originalCard.englishMeaning());
+    }
+
+    private static Stream<Arguments> rejectedManagementOperations() {
+        return Stream.of(
+                rejection("duplicate vocabulary identity", IllegalArgumentException.class,
+                        f -> f.service().addVocabularyCard("ねこ", "other", "CAT")),
+                rejection("blank Hiragana on edit", IllegalArgumentException.class,
+                        f -> f.service().editVocabularyCard(f.card().id(), " ", "neko", "cat")),
+                rejection("edit of an unknown card", IllegalArgumentException.class,
+                        f -> f.service().editVocabularyCard(UUID.randomUUID(), "ねこ", "neko", "cat")),
+                rejection("delete of an unknown card", IllegalArgumentException.class,
+                        f -> f.service().deleteVocabularyCard(UUID.randomUUID())),
+                rejection("a deck name differing only by case and spacing",
+                        IllegalArgumentException.class,
+                        f -> f.service().createDeck(" animals ")),
+                rejection("a blank deck rename", IllegalArgumentException.class,
+                        f -> f.service().renameDeck(f.deck().id(), " ")),
+                rejection("a rename onto an existing deck name", IllegalArgumentException.class,
+                        f -> f.service().renameDeck(f.deck().id(), " other ")),
+                rejection("a rename of an unknown deck", IllegalArgumentException.class,
+                        f -> f.service().renameDeck(UUID.randomUUID(), "New")),
+                rejection("delete of an unknown deck", IllegalArgumentException.class,
+                        f -> f.service().deleteDeck(UUID.randomUUID())),
+                rejection("duplicate deck membership", IllegalArgumentException.class,
+                        f -> f.service().addCardToDeck(f.deck().id(), f.card().id())),
+                rejection("an add to an unknown deck", IllegalArgumentException.class,
+                        f -> f.service().addCardToDeck(UUID.randomUUID(), f.card().id())),
+                rejection("removal of an absent membership", IllegalArgumentException.class,
+                        f -> f.service().removeCardFromDeck(f.deck().id(), UUID.randomUUID())),
+                rejection("removal from an unknown deck", IllegalArgumentException.class,
+                        f -> f.service().removeCardFromDeck(UUID.randomUUID(), f.card().id())),
+                rejection("a null deck name", NullPointerException.class,
+                        f -> f.service().createDeck(null)),
+                rejection("null Hiragana on edit", NullPointerException.class,
+                        f -> f.service().editVocabularyCard(f.card().id(), null, "neko", "cat")));
+    }
+
+    private static Arguments rejection(String name, Class<? extends Throwable> expected,
+            RejectedOperation operation) {
+        return Arguments.of(name, expected, operation);
     }
 
     @Test
@@ -211,55 +259,85 @@ class KokoServiceTest {
     }
 
     @Test
-    void failedDeckAndMembershipSavesCanBeRetriedWithoutLeakingChanges()
-            throws StorageException {
+    void failedDeckCreationSaveLeavesStateIntactAndCanBeRetried() throws StorageException {
         FakeStorage storage = new FakeStorage();
         KokoService service = new KokoService(storage, FIXED_CLOCK);
         VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
         Deck deck = service.createDeck("Animals");
+        KokoData before = service.data();
 
-        KokoData beforeCreate = service.data();
-        VocabularyCard cardBeforeCreate = currentCard(service, card.id());
-        assertFailedSave(storage, service, () -> service.createDeck("Retry"), beforeCreate,
-                List.of(cardBeforeCreate), List.of(currentDeck(service, deck.id())));
-        storage.failNextSave = false;
+        assertFailedSave(storage, service, () -> service.createDeck("Retry"), before,
+                List.of(currentCard(service, card.id())),
+                List.of(currentDeck(service, deck.id())));
+
         Deck retryDeck = service.createDeck("Retry");
         assertSame(retryDeck, currentDeck(service, retryDeck.id()));
+    }
 
-        KokoData beforeRename = service.data();
-        Deck currentRetryDeck = currentDeck(service, retryDeck.id());
-        assertFailedSave(storage, service, () -> service.renameDeck(retryDeck.id(), "Renamed"),
-                beforeRename, List.of(currentCard(service, card.id())), List.of(currentRetryDeck));
-        storage.failNextSave = false;
-        service.renameDeck(retryDeck.id(), "Renamed");
-        assertEquals("Renamed", currentDeck(service, retryDeck.id()).name());
+    @Test
+    void failedDeckRenameSaveLeavesStateIntactAndCanBeRetried() throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        KokoService service = new KokoService(storage, FIXED_CLOCK);
+        VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
+        Deck deck = service.createDeck("Animals");
+        KokoData before = service.data();
 
-        KokoData beforeAdd = service.data();
-        Deck renamedDeck = currentDeck(service, retryDeck.id());
-        assertFailedSave(storage, service, () -> service.addCardToDeck(retryDeck.id(), card.id()),
-                beforeAdd, List.of(currentCard(service, card.id())), List.of(renamedDeck));
-        storage.failNextSave = false;
-        service.addCardToDeck(retryDeck.id(), card.id());
-        assertEquals(List.of(card.id()), currentDeck(service, retryDeck.id()).cardIds());
+        assertFailedSave(storage, service, () -> service.renameDeck(deck.id(), "Renamed"), before,
+                List.of(currentCard(service, card.id())),
+                List.of(currentDeck(service, deck.id())));
 
-        KokoData beforeRemove = service.data();
-        Deck deckBeforeRemove = currentDeck(service, retryDeck.id());
-        VocabularyCard cardBeforeRemove = currentCard(service, card.id());
-        assertFailedSave(storage, service, () ->
-                service.removeCardFromDeck(retryDeck.id(), card.id()), beforeRemove,
-                List.of(cardBeforeRemove), List.of(deckBeforeRemove));
-        storage.failNextSave = false;
-        service.removeCardFromDeck(retryDeck.id(), card.id());
-        assertTrue(currentDeck(service, retryDeck.id()).cardIds().isEmpty());
+        service.renameDeck(deck.id(), "Renamed");
+        assertEquals("Renamed", currentDeck(service, deck.id()).name());
+    }
 
-        KokoData beforeDelete = service.data();
-        Deck deckBeforeDelete = currentDeck(service, retryDeck.id());
-        VocabularyCard cardBeforeDelete = currentCard(service, card.id());
-        assertFailedSave(storage, service, () -> service.deleteDeck(retryDeck.id()), beforeDelete,
-                List.of(cardBeforeDelete), List.of(deckBeforeDelete));
-        storage.failNextSave = false;
-        service.deleteDeck(retryDeck.id());
-        assertTrue(service.data().findDeckById(retryDeck.id()).isEmpty());
+    @Test
+    void failedMembershipAddSaveLeavesStateIntactAndCanBeRetried() throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        KokoService service = new KokoService(storage, FIXED_CLOCK);
+        VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
+        Deck deck = service.createDeck("Animals");
+        KokoData before = service.data();
+
+        assertFailedSave(storage, service, () -> service.addCardToDeck(deck.id(), card.id()),
+                before, List.of(currentCard(service, card.id())),
+                List.of(currentDeck(service, deck.id())));
+
+        service.addCardToDeck(deck.id(), card.id());
+        assertEquals(List.of(card.id()), currentDeck(service, deck.id()).cardIds());
+    }
+
+    @Test
+    void failedMembershipRemovalSaveLeavesStateIntactAndCanBeRetried() throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        KokoService service = new KokoService(storage, FIXED_CLOCK);
+        VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
+        Deck deck = service.createDeck("Animals");
+        service.addCardToDeck(deck.id(), card.id());
+        KokoData before = service.data();
+
+        assertFailedSave(storage, service, () -> service.removeCardFromDeck(deck.id(), card.id()),
+                before, List.of(currentCard(service, card.id())),
+                List.of(currentDeck(service, deck.id())));
+
+        service.removeCardFromDeck(deck.id(), card.id());
+        assertTrue(currentDeck(service, deck.id()).cardIds().isEmpty());
+    }
+
+    @Test
+    void failedDeckDeletionSaveLeavesStateIntactAndCanBeRetried() throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        KokoService service = new KokoService(storage, FIXED_CLOCK);
+        VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
+        Deck deck = service.createDeck("Animals");
+        service.addCardToDeck(deck.id(), card.id());
+        KokoData before = service.data();
+
+        assertFailedSave(storage, service, () -> service.deleteDeck(deck.id()), before,
+                List.of(currentCard(service, card.id())),
+                List.of(currentDeck(service, deck.id())));
+
+        service.deleteDeck(deck.id());
+        assertTrue(service.data().findDeckById(deck.id()).isEmpty());
         assertTrue(service.data().findVocabularyCard(card.id()).isPresent());
     }
 
@@ -890,6 +968,16 @@ class KokoServiceTest {
 
     private static VocabularyCard currentCardIn(KokoData data, UUID cardId) {
         return data.findVocabularyCard(cardId).orElseThrow();
+    }
+
+    /** The management fixture each rejection case acts on. */
+    private record Fixture(KokoService service, VocabularyCard card, Deck deck) {
+    }
+
+    /** A management call that must be rejected before anything is saved. */
+    @FunctionalInterface
+    private interface RejectedOperation {
+        void run(Fixture fixture) throws StorageException;
     }
 
     /** A management action whose persistence can fail. */
