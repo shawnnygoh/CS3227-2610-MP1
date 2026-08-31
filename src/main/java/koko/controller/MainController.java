@@ -9,10 +9,12 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 import javafx.collections.FXCollections;
+import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
@@ -45,6 +47,7 @@ import koko.review.TypingSession;
 import koko.service.KokoService;
 import koko.storage.StorageException;
 import koko.transfer.DeckTransferException;
+import koko.transfer.PortableDeck;
 
 /**
  * Thin JavaFX controller for vocabulary and deck management.
@@ -437,26 +440,26 @@ public final class MainController {
         if (source == null) {
             return;
         }
+        PortableDeck document;
         try {
-            Deck imported = service.importDeck(source);
-            UUID importedDeckId = imported.id();
-            refreshViews();
-            restoreSelection(deckList, importedDeckId);
-            deckList.scrollTo(deckList.getSelectionModel().getSelectedIndex());
-            setGuidance("Imported and selected the deck. Existing vocabulary kept its progress; "
-                    + "new cards are due today.");
+            document = service.prepareImport(source);
         } catch (DeckTransferException exception) {
             String header = isInvalidImportData(exception)
                     ? "Deck import rejected" : "Deck import could not be read";
             showTransferError(header, exception.getMessage());
-        } catch (IllegalArgumentException exception) {
-            showTransferError("Deck import conflicts with existing data", exception.getMessage()
-                    + "\n\nChoose a different deck name and try again. No changes were made.");
-        } catch (StorageException exception) {
-            showTransferError("Imported deck was not saved", exception.getMessage()
-                    + "\n\nNo changes were published. Check storage permissions or disk space, "
-                    + "then try again.");
+            return;
         }
+
+        Deck imported = promptImportName(source, document);
+        if (imported == null) {
+            return;
+        }
+        UUID importedDeckId = imported.id();
+        refreshViews();
+        restoreSelection(deckList, importedDeckId);
+        deckList.scrollTo(deckList.getSelectionModel().getSelectedIndex());
+        setGuidance("Imported and selected the deck. Existing vocabulary kept its progress; "
+                + "new cards are due today.");
     }
 
     /**
@@ -479,10 +482,17 @@ public final class MainController {
         if (destination == null) {
             return;
         }
+        Path normalizedDestination;
         try {
-            service.exportDeck(selectedDeckId, destination);
-            setGuidance("Exported the selected deck as UTF-8 JSON. "
-                    + "IDs and learning progress were not included.");
+            normalizedDestination = TransferFileNames.normalizeDestination(destination);
+        } catch (IllegalArgumentException exception) {
+            showTransferError("Deck export destination is invalid", exception.getMessage());
+            return;
+        }
+        try {
+            service.exportDeck(selectedDeckId, normalizedDestination);
+            setGuidance("Exported “" + selected.name() + "” to “" + normalizedDestination
+                    + "” as UTF-8 JSON.");
         } catch (DeckTransferException exception) {
             showTransferError("Deck export was not completed", exception.getMessage()
                     + "\n\nExisting files are never overwritten. Choose a new filename "
@@ -527,9 +537,73 @@ public final class MainController {
     private Path chooseExportDestination() {
         FileChooser chooser = new FileChooser();
         chooser.setTitle("Export selected deck");
+        Deck selected = deckList.getSelectionModel().getSelectedItem();
+        chooser.setInitialFileName(TransferFileNames.suggestExportFileName(selected.name()));
         chooser.getExtensionFilters().add(jsonFileFilter());
         File destination = chooser.showSaveDialog(applicationWindow());
         return destination == null ? null : destination.toPath();
+    }
+
+    /**
+     * Shows the owned confirmation dialog used to choose the imported deck name.
+     *
+     * <p>The prepared document is captured by the dialog handler, so retries
+     * never reread a source file. Recoverable name and save failures update the
+     * dialog's error label and keep the entered name available.
+     *
+     * @param source source path shown to the user.
+     * @param document validated immutable document to apply.
+     * @return the newly published deck, or null when the dialog is canceled or closed.
+     */
+    private Deck promptImportName(Path source, PortableDeck document) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(applicationWindow());
+        dialog.setTitle("Import deck");
+        dialog.setHeaderText("Confirm the imported deck name");
+        ButtonType importButton = new ButtonType("Import", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(importButton, ButtonType.CANCEL);
+
+        TextField nameField = new TextField(document.deckName());
+        Label sourceLabel = new Label("Source file: " + source.getFileName());
+        Label explanation = new Label("The filename and the deck name are separate. "
+                + "Changing this name will not modify the source file.");
+        explanation.setWrapText(true);
+        Label errorLabel = new Label();
+        errorLabel.setWrapText(true);
+        errorLabel.getStyleClass().add("error-text");
+        GridPane form = new GridPane();
+        form.setHgap(12);
+        form.setVgap(10);
+        form.setPadding(new Insets(12));
+        form.add(sourceLabel, 0, 0, 2, 1);
+        form.add(explanation, 0, 1, 2, 1);
+        form.add(new Label("Deck name"), 0, 2);
+        form.add(nameField, 1, 2);
+        form.add(errorLabel, 0, 3, 2, 1);
+        dialog.getDialogPane().setContent(form);
+
+        AtomicReference<Deck> imported = new AtomicReference<>();
+        dialog.getDialogPane().lookupButton(importButton).addEventFilter(ActionEvent.ACTION,
+                event -> {
+                    try {
+                        imported.set(service.importDeck(document, nameField.getText()));
+                        dialog.close();
+                    } catch (DeckTransferException exception) {
+                        event.consume();
+                        errorLabel.setText("The portable document is invalid: "
+                                + exception.getMessage());
+                    } catch (IllegalArgumentException exception) {
+                        event.consume();
+                        errorLabel.setText("Deck name is invalid or already in use: "
+                                + exception.getMessage() + " Correct it and try again.");
+                    } catch (StorageException exception) {
+                        event.consume();
+                        errorLabel.setText("The import could not be saved: " + exception.getMessage()
+                                + " No changes were published; correct the issue and retry.");
+                    }
+                });
+        dialog.showAndWait();
+        return imported.get();
     }
 
     private static FileChooser.ExtensionFilter jsonFileFilter() {

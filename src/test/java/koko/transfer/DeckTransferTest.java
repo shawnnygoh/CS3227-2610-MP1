@@ -152,6 +152,14 @@ class DeckTransferTest {
     }
 
     @Test
+    void publicValidationRejectsPortableDtosThatTheConstructorCannotFullyValidate() {
+        PortableDeck invalid = new PortableDeck(2, "Animals", List.of(
+                new PortableCard("ねこ", "neko", "cat")));
+
+        assertThrows(DeckTransferException.class, () -> new DeckTransfer().validate(invalid));
+    }
+
+    @Test
     void existingFileIsNeverReplaced() throws Exception {
         Path path = temporaryDirectory.resolve("sentinel.json");
         byte[] sentinel = "do not replace".getBytes(StandardCharsets.UTF_8);

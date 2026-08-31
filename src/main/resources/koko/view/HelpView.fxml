@@ -22,9 +22,9 @@
                 <Label wrapText="true" minHeight="-Infinity"
                        text="Use Transfer to import or export one deck as UTF-8 JSON. Import creates one deck and keeps card membership order. Portable transfer is vocabulary-only: each card contains Hiragana, Romaji, and English meaning, not IDs or learning progress. Empty decks are valid." />
                 <Label wrapText="true" minHeight="-Infinity"
-                       text="Import reuses matching global vocabulary and keeps its text and progress. Only new vocabulary starts with fresh progress in both modes and is due today. Import rejects invalid or unsupported documents, duplicate vocabulary within the file, and case-insensitive deck-name conflicts without changing your data." />
+                       text="Import first validates the complete file, then lets you confirm or edit the imported deck name. The filename and embedded deck name are separate. Blank or case-insensitive conflicting names stay in the dialog for correction. Import reuses matching global vocabulary and keeps its text and progress. Only new vocabulary starts with fresh progress in both modes and is due today. Invalid or unsupported documents and duplicate vocabulary within the file are rejected without changing your data." />
                 <Label wrapText="true" minHeight="-Infinity"
-                       text="Export applies to the selected deck, including an empty deck. Existing destination files are never overwritten; choose a new filename when one already exists. Canceling either file chooser leaves your data and selection unchanged." />
+                       text="Export applies to the selected deck, including an empty deck. Koko suggests a JSON filename from the deck name, but you can edit it; this changes only the file destination, not the embedded deck name. Existing destination files are never overwritten, including after adding a missing .json suffix. Canceling either file chooser or the import-name dialog leaves your data and selection unchanged." />
             </VBox>
             <VBox spacing="10" minWidth="0">
                 <Label text="Choose a review" styleClass="subsection-title" />

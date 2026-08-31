@@ -1,5 +1,6 @@
 package koko.service;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -78,26 +79,43 @@ public final class KokoService {
     }
 
     /**
-     * Imports one portable deck as a single transactional application mutation.
-     *
-     * <p>The document is fully parsed and validated before the service samples
-     * the import date or changes a detached candidate. Existing global cards are
-     * matched by the domain identity and retain their text, UUID, memberships,
-     * and both progress records.
+     * Reads and validates one portable deck without changing application state.
      *
      * @param source source portable JSON file.
-     * @return the newly created deck.
+     * @return immutable validated portable deck contents.
      * @throws DeckTransferException if the source cannot be read or violates the
      *         portable format.
-     * @throws IllegalArgumentException if the deck name conflicts with an existing
-     *         deck.
-     * @throws StorageException if the complete candidate cannot be persisted.
      * @throws NullPointerException if source is null.
      */
-    public Deck importDeck(Path source) throws DeckTransferException, StorageException {
-        PortableDeck document = deckTransfer.read(source);
-        LocalDate importDate = LocalDate.now(clock);
+    public PortableDeck prepareImport(Path source) throws DeckTransferException {
+        return deckTransfer.read(source);
+    }
+
+    /**
+     * Applies a validated portable document under a confirmed deck name.
+     *
+     * <p>The document is validated again because public DTO application must not
+     * bypass the portable boundary. The import date is sampled for every
+     * application attempt, after name validation and before fresh cards are made.
+     *
+     * @param document immutable portable document to apply.
+     * @param confirmedName final application deck name.
+     * @return the newly created published deck.
+     * @throws DeckTransferException if the document is invalid or unsupported.
+     * @throws IllegalArgumentException if the confirmed name is blank or conflicts.
+     * @throws StorageException if the complete candidate cannot be persisted.
+     * @throws NullPointerException if document or confirmedName is null.
+     */
+    public Deck importDeck(PortableDeck document, String confirmedName)
+            throws DeckTransferException, StorageException {
+        deckTransfer.validate(document);
+        String normalizedName = Deck.normalizeName(confirmedName);
+        if (!StandardCharsets.UTF_8.newEncoder().canEncode(normalizedName)) {
+            throw new IllegalArgumentException("Deck name must contain valid Unicode text");
+        }
         KokoData candidate = copyOf(data);
+        Deck importedDeck = candidate.createDeck(normalizedName);
+        LocalDate importDate = LocalDate.now(clock);
         List<UUID> resolvedCardIds = new ArrayList<>();
         for (PortableCard portableCard : document.cards()) {
             VocabularyCard card = candidate.findVocabularyCardByIdentity(
@@ -108,13 +126,30 @@ public final class KokoService {
             }
             resolvedCardIds.add(card.id());
         }
-        Deck importedDeck = candidate.createDeck(document.deckName());
         for (UUID cardId : resolvedCardIds) {
             candidate.addCardToDeck(importedDeck.id(), cardId);
         }
         storage.save(candidate);
         data = candidate;
         return importedDeck;
+    }
+
+    /**
+     * Reads and imports a portable deck using its embedded deck name.
+     *
+     * <p>This compatibility operation delegates to the same preparation and
+     * application steps used by the editable import workflow.
+     *
+     * @param source source portable JSON file.
+     * @return the newly created deck.
+     * @throws DeckTransferException if the source cannot be read or is invalid.
+     * @throws IllegalArgumentException if the embedded deck name conflicts.
+     * @throws StorageException if the complete candidate cannot be persisted.
+     * @throws NullPointerException if source is null.
+     */
+    public Deck importDeck(Path source) throws DeckTransferException, StorageException {
+        PortableDeck document = prepareImport(source);
+        return importDeck(document, document.deckName());
     }
 
     /**

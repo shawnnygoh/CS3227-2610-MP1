@@ -103,6 +103,22 @@ public final class DeckTransfer {
     }
 
     /**
+     * Validates a portable document supplied by a service caller.
+     *
+     * <p>The record constructor only protects null references. This operation
+     * applies the complete portable schema, text, Unicode, and document-wide
+     * uniqueness rules before a caller can apply the document.
+     *
+     * @param document portable deck document to validate.
+     * @throws DeckTransferException if the document is invalid or unsupported.
+     * @throws NullPointerException if document is null.
+     */
+    public void validate(PortableDeck document) throws DeckTransferException {
+        Objects.requireNonNull(document, "Portable deck cannot be null");
+        validateDocument(document);
+    }
+
+    /**
      * Validates and creates a new destination file containing one portable deck document.
      *
      * <p>The destination is opened only after serialization completes. Existing
@@ -119,7 +135,7 @@ public final class DeckTransfer {
         Objects.requireNonNull(document, "Portable deck cannot be null");
         Objects.requireNonNull(destination, "Destination path cannot be null");
         try {
-            validateDocument(document);
+            validate(document);
             String json = mapper.writeValueAsString(document);
             byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
             writeNewFile(bytes, destination);
