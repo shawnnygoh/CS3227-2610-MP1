@@ -4,11 +4,9 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import koko.model.Deck;
@@ -28,6 +26,9 @@ import koko.service.KokoService;
  * <p>The queue owns selection, ordering, and current-card checks. Lifecycle
  * states and outcome counters differ between review modes and stay with the
  * session that owns this queue.
+ *
+ * <p>Deck membership already guarantees unique card IDs, so deck queues do not
+ * need to deduplicate them.
  */
 final class ReviewQueue {
 
@@ -81,15 +82,12 @@ final class ReviewQueue {
         Objects.requireNonNull(mode, "Mode cannot be null");
         Deck deck = requireDeck(checkedService, checkedDeckId);
         LocalDate startDate = LocalDate.now(checkedClock);
-        Set<UUID> seenCardIds = new LinkedHashSet<>();
         List<QueuedCard> dueCards = new ArrayList<>();
         for (UUID cardId : deck.cardIds()) {
-            if (seenCardIds.add(cardId)) {
-                VocabularyCard card = requireCardForStart(checkedService, cardId);
-                ModeProgress progress = card.progressFor(mode);
-                if (progress.isDueOn(startDate)) {
-                    dueCards.add(new QueuedCard(card.id(), progress.nextDueDate()));
-                }
+            VocabularyCard card = requireCardForStart(checkedService, cardId);
+            ModeProgress progress = card.progressFor(mode);
+            if (progress.isDueOn(startDate)) {
+                dueCards.add(new QueuedCard(card.id(), progress.nextDueDate()));
             }
         }
         dueCards.sort(Comparator.comparing(QueuedCard::dueDate));
@@ -113,12 +111,9 @@ final class ReviewQueue {
         KokoService checkedService = Objects.requireNonNull(service, "Service cannot be null");
         UUID checkedDeckId = Objects.requireNonNull(deckId, "Deck ID cannot be null");
         Deck deck = requireDeck(checkedService, checkedDeckId);
-        Set<UUID> seenCardIds = new LinkedHashSet<>();
         List<UUID> queuedCardIds = new ArrayList<>();
         for (UUID cardId : deck.cardIds()) {
-            if (seenCardIds.add(cardId)) {
-                queuedCardIds.add(requireCardForStart(checkedService, cardId).id());
-            }
+            queuedCardIds.add(requireCardForStart(checkedService, cardId).id());
         }
         return new ReviewQueue(checkedService, queuedCardIds);
     }
