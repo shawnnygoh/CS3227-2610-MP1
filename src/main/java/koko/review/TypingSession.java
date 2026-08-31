@@ -249,24 +249,6 @@ public final class TypingSession {
     }
 
     /**
-     * Returns the number of successfully persisted incorrect outcomes.
-     *
-     * @return incorrect outcome count.
-     */
-    public int incorrect() {
-        return incorrect;
-    }
-
-    /**
-     * Returns the number of successfully persisted skipped outcomes.
-     *
-     * @return skipped outcome count.
-     */
-    public int skipped() {
-        return skipped;
-    }
-
-    /**
      * Returns the number of successfully persisted outcomes.
      *
      * @return attempted count.
