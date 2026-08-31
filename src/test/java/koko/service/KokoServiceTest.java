@@ -15,7 +15,6 @@ import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -31,6 +30,7 @@ import koko.model.VocabularyCard;
 import koko.storage.JsonStorage;
 import koko.storage.Storage;
 import koko.storage.StorageException;
+import koko.testutil.KokoDataSnapshots;
 
 /**
  * Tests service orchestration, mutation persistence, and injected dependencies.
@@ -138,7 +138,7 @@ class KokoServiceTest {
         Deck otherDeck = service.createDeck("Other");
         service.addCardToDeck(deck.id(), card.id());
         KokoData originalData = service.data();
-        KokoData originalValues = FakeStorage.copyOf(originalData);
+        KokoData originalValues = KokoDataSnapshots.copyOf(originalData);
         VocabularyCard originalCard = service.data().findVocabularyCard(card.id()).orElseThrow();
         Deck originalDeck = service.data().findDeckById(deck.id()).orElseThrow();
         Deck originalOtherDeck = service.data().findDeckById(otherDeck.id()).orElseThrow();
@@ -278,7 +278,7 @@ class KokoServiceTest {
         assertThrows(IllegalArgumentException.class, () ->
                 service.addCardToDeck(deck.id(), card.id()));
         assertThrows(IllegalArgumentException.class, () ->
-                service.removeCardFromDeck(deck.id(), java.util.UUID.randomUUID()));
+                service.removeCardFromDeck(deck.id(), UUID.randomUUID()));
 
         assertEquals(savesBeforeRejectedOperations, storage.successfulSaveCount);
     }
@@ -405,15 +405,15 @@ class KokoServiceTest {
         service.addCardToDeck(deck.id(), second.id());
 
         KokoData originalData = service.data();
-        KokoData originalValues = FakeStorage.copyOf(originalData);
+        KokoData originalValues = KokoDataSnapshots.copyOf(originalData);
         List<VocabularyCard> originalCards = originalData.vocabularyCards();
         List<Deck> originalDecks = originalData.decks();
         VocabularyCard originalCard = currentCard(service, first.id());
         Deck originalDeck = currentDeck(service, deck.id());
         List<UUID> originalMemberships = originalDeck.cardIds();
         byte[] originalBytes = Files.readAllBytes(path);
-        int savesBefore = storage.saveInvocations;
-        storage.failNextSave = true;
+        int savesBefore = storage.saveInvocations();
+        storage.failNextSave();
 
         assertThrows(StorageException.class, () -> service.deleteVocabularyCard(first.id()));
 
@@ -426,7 +426,7 @@ class KokoServiceTest {
         assertEquals(List.of(first.id(), second.id()), originalMemberships);
         assertArrayEquals(originalBytes, Files.readAllBytes(path));
         assertDataEquals(originalValues, jsonStorage.load());
-        assertEquals(savesBefore + 1, storage.saveInvocations);
+        assertEquals(savesBefore + 1, storage.saveInvocations());
 
         service.deleteVocabularyCard(first.id());
 
@@ -434,7 +434,7 @@ class KokoServiceTest {
         assertEquals(List.of(second.id()), service.data().vocabularyCards().stream().map(VocabularyCard::id).toList());
         assertEquals(List.of(second.id()), currentDeck(service, deck.id()).cardIds());
         assertDataEquals(service.data(), jsonStorage.load());
-        assertEquals(savesBefore + 2, storage.saveInvocations);
+        assertEquals(savesBefore + 2, storage.saveInvocations());
         assertDataEquals(originalValues, originalData);
         assertEquals(List.of(first.id(), second.id()), originalMemberships);
     }
@@ -847,8 +847,8 @@ class KokoServiceTest {
     private static void assertFailedSave(FakeStorage storage, KokoService service,
             StorageMutation operation, KokoData originalData, List<VocabularyCard> cards,
             List<Deck> decks) {
-        KokoData originalValues = FakeStorage.copyOf(originalData);
-        KokoData savedValues = FakeStorage.copyOf(storage.loadedData);
+        KokoData originalValues = KokoDataSnapshots.copyOf(originalData);
+        KokoData savedValues = KokoDataSnapshots.copyOf(storage.loadedData);
         int savesBefore = storage.saveInvocations;
         int successfulSavesBefore = storage.successfulSaveCount;
         storage.failNextSave = true;
@@ -927,33 +927,6 @@ class KokoServiceTest {
         }
     }
 
-    /** Fails a requested save before writing to real JSON storage. */
-    private static final class FailOnceStorage implements Storage {
-
-        private final JsonStorage delegate;
-        private int saveInvocations;
-        private boolean failNextSave;
-
-        private FailOnceStorage(JsonStorage delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public KokoData load() throws StorageException {
-            return delegate.load();
-        }
-
-        @Override
-        public void save(KokoData data) throws StorageException {
-            saveInvocations++;
-            if (failNextSave) {
-                failNextSave = false;
-                throw new StorageException("forced save failure", null);
-            }
-            delegate.save(data);
-        }
-    }
-
     /**
      * Small deterministic storage double that stores detached snapshots and
      * counts attempted and successful saves separately.
@@ -986,25 +959,7 @@ class KokoServiceTest {
             }
             successfulSaveCount++;
             lastSavedData = data;
-            loadedData = copyOf(data);
-        }
-
-        private static KokoData copyOf(KokoData source) {
-            List<VocabularyCard> cards = new ArrayList<>();
-            for (VocabularyCard card : source.vocabularyCards()) {
-                cards.add(VocabularyCard.restore(card.id(), card.hiragana(), card.romaji(),
-                        card.englishMeaning(), copyProgress(card.progressFor(Mode.FLASHCARD)),
-                        copyProgress(card.progressFor(Mode.TYPING))));
-            }
-            List<Deck> decks = source.decks().stream()
-                    .map(deck -> Deck.restore(deck.id(), deck.name(), deck.cardIds()))
-                    .toList();
-            return KokoData.restore(cards, decks);
-        }
-
-        private static ModeProgress copyProgress(ModeProgress progress) {
-            return new ModeProgress(progress.mastery(), progress.attempts(),
-                    progress.correctAttempts(), progress.lastReviewedDate(), progress.nextDueDate());
+            loadedData = KokoDataSnapshots.copyOf(data);
         }
     }
 

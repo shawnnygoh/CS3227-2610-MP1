@@ -31,6 +31,7 @@ import koko.service.ReviewOutcome;
 import koko.storage.JsonStorage;
 import koko.storage.Storage;
 import koko.storage.StorageException;
+import koko.testutil.KokoDataSnapshots;
 
 /**
  * Tests headless English-to-Hiragana typing review coordination.
@@ -629,26 +630,9 @@ class TypingSessionTest {
                 failNextSave = false;
                 throw new StorageException("forced save failure", null);
             }
-            loadedData = copyOf(data);
+            loadedData = KokoDataSnapshots.copyOf(data);
             successfulSaveCount++;
         }
 
-        private static KokoData copyOf(KokoData source) {
-            List<VocabularyCard> cards = new ArrayList<>();
-            for (VocabularyCard card : source.vocabularyCards()) {
-                cards.add(VocabularyCard.restore(card.id(), card.hiragana(), card.romaji(),
-                        card.englishMeaning(), copyProgress(card.progressFor(Mode.FLASHCARD)),
-                        copyProgress(card.progressFor(Mode.TYPING))));
-            }
-            List<Deck> decks = source.decks().stream()
-                    .map(deck -> Deck.restore(deck.id(), deck.name(), deck.cardIds()))
-                    .toList();
-            return KokoData.restore(cards, decks);
-        }
-
-        private static ModeProgress copyProgress(ModeProgress progress) {
-            return new ModeProgress(progress.mastery(), progress.attempts(),
-                    progress.correctAttempts(), progress.lastReviewedDate(), progress.nextDueDate());
-        }
     }
 }

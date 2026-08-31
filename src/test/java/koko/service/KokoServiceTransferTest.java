@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.InstantSource;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -40,6 +41,8 @@ import koko.model.VocabularyCard;
 import koko.storage.JsonStorage;
 import koko.storage.Storage;
 import koko.storage.StorageException;
+import koko.testutil.KokoDataSnapshots;
+import koko.transfer.DeckTransfer;
 import koko.transfer.DeckTransferException;
 import koko.transfer.PortableCard;
 import koko.transfer.PortableDeck;
@@ -284,10 +287,10 @@ class KokoServiceTransferTest {
         KokoData originalData = service.data();
         card = service.data().findVocabularyCard(card.id()).orElseThrow();
         deck = service.data().findDeckById(deck.id()).orElseThrow();
-        KokoData originalValues = copyOf(originalData);
+        KokoData originalValues = KokoDataSnapshots.copyOf(originalData);
         byte[] originalBytes = Files.readAllBytes(storagePath);
         ModeProgress originalProgress = card.progressFor(Mode.FLASHCARD);
-        int savesBefore = storage.saveInvocations;
+        int savesBefore = storage.saveInvocations();
         Path source = writeSource("{\"schemaVersion\":1,\"deckName\":\"Imported\","
                 + "\"cards\":[{\"hiragana\":\"いぬ\",\"romaji\":\"inu\","
                 + "\"englishMeaning\":\"dog\"},{\"hiragana\":\"猫\","
@@ -305,7 +308,7 @@ class KokoServiceTransferTest {
 
         for (Path rejected : List.of(source, duplicate, invalidMatch, invalidUnicode, missing)) {
             assertThrows(DeckTransferException.class, () -> service.importDeck(rejected));
-            assertEquals(savesBefore, storage.saveInvocations);
+            assertEquals(savesBefore, storage.saveInvocations());
             assertSame(originalData, service.data());
             assertSame(card, service.data().findVocabularyCard(card.id()).orElseThrow());
             assertSame(originalProgress, card.progressFor(Mode.FLASHCARD));
@@ -328,7 +331,7 @@ class KokoServiceTransferTest {
                 + "\"englishMeaning\":\"cat\"}]}");
 
         assertThrows(IllegalArgumentException.class, () -> service.importDeck(conflict));
-        assertEquals(1, storage.saveInvocations);
+        assertEquals(1, storage.saveInvocations());
         assertSame(originalData, service.data());
         assertSame(existing, service.data().findDeckById(existing.id()).orElseThrow());
         assertTrue(service.data().vocabularyCards().isEmpty());
@@ -338,12 +341,12 @@ class KokoServiceTransferTest {
                 .replace(" aNiMaLs ", "Imported"));
         Deck imported = service.importDeck(source);
         KokoData importedData = service.data();
-        KokoData importedValues = copyOf(importedData);
+        KokoData importedValues = KokoDataSnapshots.copyOf(importedData);
         byte[] importedBytes = Files.readAllBytes(storagePath);
         byte[] sourceBytes = Files.readAllBytes(source);
 
         assertThrows(IllegalArgumentException.class, () -> service.importDeck(source));
-        assertEquals(2, storage.saveInvocations);
+        assertEquals(2, storage.saveInvocations());
         assertSame(importedData, service.data());
         assertSame(imported, service.data().findDeckById(imported.id()).orElseThrow());
         assertDataEquals(importedValues, service.data());
@@ -369,11 +372,12 @@ class KokoServiceTransferTest {
         FailOnceStorage storage = new FailOnceStorage(jsonStorage);
         AtomicReference<Instant> now = new AtomicReference<>(
                 Instant.parse("2026-08-30T01:00:00Z"));
-        Clock clock = new ReferenceClock(now, ZoneId.of("Asia/Singapore"));
+        InstantSource timeSource = now::get;
+        Clock clock = timeSource.withZone(ZoneId.of("Asia/Singapore"));
         KokoService service = new KokoService(storage, clock);
         service.load();
         KokoData originalData = service.data();
-        KokoData originalValues = copyOf(originalData);
+        KokoData originalValues = KokoDataSnapshots.copyOf(originalData);
         VocabularyCard originalCard = service.data().findVocabularyCard(existing.id()).orElseThrow();
         Deck originalDeck = service.data().findDeckById(existingDeck.id()).orElseThrow();
         Path source = writeSource("{\"schemaVersion\":1,\"deckName\":\"Retry\","
@@ -383,9 +387,9 @@ class KokoServiceTransferTest {
                 + "{\"hiragana\":\"いぬ\",\"romaji\":\"inu\",\"englishMeaning\":\"dog\"}]}");
         PortableDeck document = service.prepareImport(source);
 
-        storage.failNextSave = true;
+        storage.failNextSave();
         assertThrows(StorageException.class, () -> service.importDeck(document, "Retry"));
-        assertEquals(1, storage.saveInvocations);
+        assertEquals(1, storage.saveInvocations());
         assertArrayEquals(originalBytes, Files.readAllBytes(storagePath));
         assertSame(originalData, service.data());
         assertSame(originalCard, service.data().findVocabularyCard(existing.id()).orElseThrow());
@@ -396,10 +400,10 @@ class KokoServiceTransferTest {
 
         Files.delete(source);
         now.set(Instant.parse("2026-09-01T01:00:00Z"));
-        int savesBeforeRetry = storage.saveInvocations;
+        int savesBeforeRetry = storage.saveInvocations();
         Deck imported = service.importDeck(document, "Retry Edited");
 
-        assertEquals(savesBeforeRetry + 1, storage.saveInvocations);
+        assertEquals(savesBeforeRetry + 1, storage.saveInvocations());
         assertEquals("Retry Edited", imported.name());
         assertEquals("Retry", document.deckName());
         assertTrue(Files.notExists(source));
@@ -467,17 +471,17 @@ class KokoServiceTransferTest {
         Deck deck = service.createDeck("動物 \"\\");
         service.addCardToDeck(deck.id(), second.id());
         service.addCardToDeck(deck.id(), first.id());
-        int savesBeforeExport = storage.saveInvocations;
+        int savesBeforeExport = storage.saveInvocations();
         KokoData dataBeforeExport = service.data();
         Deck currentDeck = service.data().findDeckById(deck.id()).orElseThrow();
         VocabularyCard currentFirst = service.data().findVocabularyCard(first.id()).orElseThrow();
-        KokoData valuesBeforeExport = copyOf(dataBeforeExport);
+        KokoData valuesBeforeExport = KokoDataSnapshots.copyOf(dataBeforeExport);
         byte[] bytesBeforeExport = Files.readAllBytes(storagePath);
         Path destination = temporaryDirectory.resolve("export with spaces.json");
 
         service.exportDeck(deck.id(), destination);
 
-        assertEquals(savesBeforeExport, storage.saveInvocations);
+        assertEquals(savesBeforeExport, storage.saveInvocations());
         assertSame(dataBeforeExport, service.data());
         assertSame(currentDeck, service.data().findDeckById(deck.id()).orElseThrow());
         assertSame(currentFirst, service.data().findVocabularyCard(first.id()).orElseThrow());
@@ -758,23 +762,6 @@ class KokoServiceTransferTest {
         assertEquals(expected.nextDueDate(), actual.nextDueDate());
     }
 
-    private static KokoData copyOf(KokoData source) {
-        List<VocabularyCard> cards = source.vocabularyCards().stream()
-                .map(card -> VocabularyCard.restore(card.id(), card.hiragana(), card.romaji(),
-                        card.englishMeaning(), copyProgress(card.progressFor(Mode.FLASHCARD)),
-                        copyProgress(card.progressFor(Mode.TYPING))))
-                .toList();
-        List<Deck> decks = source.decks().stream()
-                .map(deck -> Deck.restore(deck.id(), deck.name(), deck.cardIds()))
-                .toList();
-        return KokoData.restore(cards, decks);
-    }
-
-    private static ModeProgress copyProgress(ModeProgress progress) {
-        return new ModeProgress(progress.mastery(), progress.attempts(),
-                progress.correctAttempts(), progress.lastReviewedDate(), progress.nextDueDate());
-    }
-
     /**
      * Checks service rejection without mistaking a confirmation failure for service protection.
      *
@@ -786,7 +773,7 @@ class KokoServiceTransferTest {
     private static void assertProtectedDestination(KokoService service, Deck deck,
             Path destination) throws DeckTransferException {
         assertThrows(DeckTransferException.class, () -> service.exportDeck(deck.id(), destination));
-        var confirmation = new koko.transfer.DeckTransfer.ConfirmedDestination(destination);
+        var confirmation = new DeckTransfer.ConfirmedDestination(destination);
         assertThrows(DeckTransferException.class, () -> service.exportDeck(deck.id(), confirmation));
     }
 
@@ -804,61 +791,8 @@ class KokoServiceTransferTest {
         @Override
         public void save(KokoData data) {
             saveInvocations++;
-            loadedData = copyOf(data);
+            loadedData = KokoDataSnapshots.copyOf(data);
         }
     }
 
-    /** Fails a requested save before delegating to actual JSON persistence. */
-    private static final class FailOnceStorage implements Storage {
-
-        private final JsonStorage delegate;
-        private int saveInvocations;
-        private boolean failNextSave;
-
-        private FailOnceStorage(JsonStorage delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public KokoData load() throws StorageException {
-            return delegate.load();
-        }
-
-        @Override
-        public void save(KokoData data) throws StorageException {
-            saveInvocations++;
-            if (failNextSave) {
-                failNextSave = false;
-                throw new StorageException("forced save failure", null);
-            }
-            delegate.save(data);
-        }
-    }
-
-    /** Supplies controllable dates without sleeping or changing the system clock. */
-    private static final class ReferenceClock extends Clock {
-
-        private final AtomicReference<Instant> instant;
-        private final ZoneId zone;
-
-        private ReferenceClock(AtomicReference<Instant> instant, ZoneId zone) {
-            this.instant = instant;
-            this.zone = zone;
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return zone;
-        }
-
-        @Override
-        public Clock withZone(ZoneId newZone) {
-            return new ReferenceClock(instant, newZone);
-        }
-
-        @Override
-        public Instant instant() {
-            return instant.get();
-        }
-    }
 }

@@ -33,6 +33,7 @@ import koko.service.ReviewOutcome;
 import koko.storage.JsonStorage;
 import koko.storage.Storage;
 import koko.storage.StorageException;
+import koko.testutil.KokoDataSnapshots;
 
 /**
  * Tests headless flashcard session coordination and its persistence boundary.
@@ -729,7 +730,7 @@ class FlashcardSessionTest {
                 failNextSave = false;
                 throw new StorageException("forced save failure", null);
             }
-            loadedData = data;
+            loadedData = KokoDataSnapshots.copyOf(data);
             successfulSaveCount++;
         }
     }
