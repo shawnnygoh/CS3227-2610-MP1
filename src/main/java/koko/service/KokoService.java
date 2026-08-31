@@ -1,17 +1,11 @@
 package koko.service;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -211,7 +205,7 @@ public final class KokoService {
     private PortableDeck prepareExport(UUID deckId, Path destination) throws DeckTransferException {
         Objects.requireNonNull(deckId, "Deck ID cannot be null");
         Objects.requireNonNull(destination, "Destination path cannot be null");
-        rejectInternalStorageAlias(destination);
+        InternalStorageGuard.rejectAlias(storage.configuredPath(), destination);
         Deck deck = data.findDeckById(deckId)
                 .orElseThrow(() -> new IllegalArgumentException("Deck does not exist"));
         List<PortableCard> cards = deck.cardIds().stream()
@@ -221,91 +215,6 @@ public final class KokoService {
                         card.englishMeaning()))
                 .toList();
         return new PortableDeck(DeckTransfer.CURRENT_SCHEMA_VERSION, deck.name(), cards);
-    }
-
-    /**
-     * Rejects paths that could address Koko's own configured storage file.
-     *
-     * <p>Absolute paths retain symbolic-link and parent traversal semantics; do
-     * not collapse a linked directory followed by {@code ..}. File identity
-     * checks cover hard links, case aliases on providers that support them, and
-     * existing paths reached through a parent-directory link. An identity check
-     * that fails for a reason other than absence fails closed.
-     *
-     * @param destination requested export path.
-     * @throws DeckTransferException if the path is protected or cannot be checked.
-     */
-    private void rejectInternalStorageAlias(Path destination) throws DeckTransferException {
-        Optional<Path> configured = storage.configuredPath();
-        if (configured.isEmpty()) {
-            return;
-        }
-        Path destinationPath = destination.toAbsolutePath();
-        Path storagePath = configured.get().toAbsolutePath();
-        if (destinationPath.equals(storagePath)) {
-            throw new DeckTransferException("Export destination is Koko's protected internal storage");
-        }
-
-        BasicFileAttributes destinationAttributes = readAttributesIfPresent(destinationPath);
-        BasicFileAttributes storageAttributes = readAttributesIfPresent(storagePath);
-        if (destinationAttributes != null && storageAttributes != null) {
-            if (sameFile(destinationPath, storagePath)) {
-                throw new DeckTransferException("Export destination aliases Koko's protected "
-                        + "internal storage");
-            }
-            return;
-        }
-
-        Path destinationParent = destinationPath.getParent();
-        Path storageParent = storagePath.getParent();
-        if (destinationParent == null || storageParent == null) {
-            return;
-        }
-        BasicFileAttributes destinationParentAttributes = readAttributesIfPresent(destinationParent);
-        BasicFileAttributes storageParentAttributes = readAttributesIfPresent(storageParent);
-        if (destinationParentAttributes != null && storageParentAttributes != null
-                && sameFile(destinationParent, storageParent)
-                && destinationPath.getFileName().toString()
-                        .equalsIgnoreCase(storagePath.getFileName().toString())) {
-            throw new DeckTransferException("Export destination aliases Koko's protected internal "
-                    + "storage");
-        }
-    }
-
-    /**
-     * Reads identity-check attributes without following the final symbolic link.
-     *
-     * @param path path to inspect without lexical normalization.
-     * @return attributes, or null only when the path is absent.
-     * @throws DeckTransferException if inspection fails for a reason other than absence.
-     */
-    private static BasicFileAttributes readAttributesIfPresent(Path path)
-            throws DeckTransferException {
-        try {
-            return Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-        } catch (NoSuchFileException exception) {
-            return null;
-        } catch (IOException | RuntimeException exception) {
-            throw new DeckTransferException("Could not safely verify export destination identity",
-                    exception);
-        }
-    }
-
-    /**
-     * Compares filesystem identity while preserving linked-directory traversal.
-     *
-     * @param first first existing path.
-     * @param second second existing path.
-     * @return true when both paths refer to the same file.
-     * @throws DeckTransferException if identity cannot be checked.
-     */
-    private static boolean sameFile(Path first, Path second) throws DeckTransferException {
-        try {
-            return Files.isSameFile(first, second);
-        } catch (IOException | RuntimeException exception) {
-            throw new DeckTransferException("Could not safely verify export destination identity",
-                    exception);
-        }
     }
 
     /**
