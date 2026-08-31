@@ -38,12 +38,12 @@ class ExampleDeckTest {
 
     @Test
     void exampleImportsIntoEmptyStorageWithOrderedCardsAndFreshProgress() throws Exception {
-        PortableDeck document = new DeckTransfer().read(EXAMPLE_PATH);
         JsonStorage storage = new JsonStorage(temporaryDirectory.resolve("new library.json"));
         KokoService service = new KokoService(storage, IMPORT_CLOCK);
         service.load();
 
-        Deck imported = service.importDeck(EXAMPLE_PATH);
+        PortableDeck document = service.prepareImport(EXAMPLE_PATH);
+        Deck imported = service.importDeck(document, document.deckName());
 
         assertEquals(1, document.schemaVersion());
         assertEquals("Koko Starter Vocabulary", imported.name());
@@ -67,7 +67,9 @@ class ExampleDeckTest {
 
     @Test
     void exampleReusesMatchingVocabularyWithoutReplacingTextOrEitherProgress() throws Exception {
-        PortableDeck document = new DeckTransfer().read(EXAMPLE_PATH);
+        JsonStorage storage = new JsonStorage(temporaryDirectory.resolve("existing library.json"));
+        KokoService service = new KokoService(storage, IMPORT_CLOCK);
+        PortableDeck document = service.prepareImport(EXAMPLE_PATH);
         PortableCard exampleCard = document.cards().get(0);
         KokoData initial = new KokoData();
         VocabularyCard shared = initial.addVocabularyCard(exampleCard.hiragana(), "IE",
@@ -78,12 +80,10 @@ class ExampleDeckTest {
         shared.updateProgress(Mode.TYPING, typing);
         Deck existing = initial.createDeck("Existing deck");
         initial.addCardToDeck(existing.id(), shared.id());
-        JsonStorage storage = new JsonStorage(temporaryDirectory.resolve("existing library.json"));
         storage.save(initial);
-        KokoService service = new KokoService(storage, IMPORT_CLOCK);
         service.load();
 
-        Deck imported = service.importDeck(EXAMPLE_PATH);
+        Deck imported = service.importDeck(document, document.deckName());
 
         assertEquals(shared.id(), imported.cardIds().get(0));
         assertEquals(12, service.data().vocabularyCards().size());

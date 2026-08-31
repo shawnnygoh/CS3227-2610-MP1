@@ -39,6 +39,7 @@ import koko.model.ModeProgress;
 import koko.model.VocabularyCard;
 import koko.service.KokoService;
 import koko.service.ReviewOutcome;
+import koko.transfer.PortableDeck;
 
 /**
  * Tests versioned JSON persistence and safe-save behavior.
@@ -471,7 +472,9 @@ class JsonStorageTest {
                 + "\"cards\":[{\"hiragana\":\"ねこ\",\"romaji\":\"neko\","
                 + "\"englishMeaning\":\"cat\"}]}");
 
-        assertThrows(StorageException.class, () -> service.importDeck(source));
+        PortableDeck document = service.prepareImport(source);
+
+        assertThrows(StorageException.class, () -> service.importDeck(document, document.deckName()));
 
         assertSame(originalData, service.data());
         assertTrue(service.data().decks().isEmpty());
@@ -481,7 +484,7 @@ class JsonStorageTest {
         assertNoTemporaryFile(path);
 
         moveFailure.failMoves = false;
-        Deck imported = service.importDeck(source);
+        Deck imported = service.importDeck(document, document.deckName());
 
         assertEquals(1, service.data().decks().size());
         assertSame(imported, service.data().findDeckById(imported.id()).orElseThrow());

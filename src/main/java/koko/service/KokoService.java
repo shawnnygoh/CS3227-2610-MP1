@@ -148,24 +148,6 @@ public final class KokoService {
     }
 
     /**
-     * Reads and imports a portable deck using its embedded deck name.
-     *
-     * <p>This compatibility operation delegates to the same preparation and
-     * application steps used by the editable import workflow.
-     *
-     * @param source source portable JSON file.
-     * @return the newly created deck.
-     * @throws DeckTransferException if the source cannot be read or is invalid.
-     * @throws IllegalArgumentException if the embedded deck name conflicts.
-     * @throws StorageException if the complete candidate cannot be persisted.
-     * @throws NullPointerException if source is null.
-     */
-    public Deck importDeck(Path source) throws DeckTransferException, StorageException {
-        PortableDeck document = prepareImport(source);
-        return importDeck(document, document.deckName());
-    }
-
-    /**
      * Exports one current deck to a new portable JSON file.
      *
      * <p>Membership order is taken from the deck while card text is resolved

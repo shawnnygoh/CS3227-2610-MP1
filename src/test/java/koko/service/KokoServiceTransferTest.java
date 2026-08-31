@@ -108,7 +108,8 @@ class KokoServiceTransferTest {
                 + "\"englishMeaning\":\"CAT\"}]}");
         byte[] sourceBytes = Files.readAllBytes(source);
 
-        Deck imported = service.importDeck(source);
+        PortableDeck document = service.prepareImport(source);
+        Deck imported = service.importDeck(document, document.deckName());
 
         assertEquals(savesBeforeImport + 1, storage.saveInvocations);
         assertEquals(List.of(unassigned.id(),
@@ -143,7 +144,8 @@ class KokoServiceTransferTest {
         Path source = writeSource("{\"schemaVersion\":1,\"deckName\":\"Empty\","
                 + "\"cards\":[]}");
 
-        Deck imported = service.importDeck(source);
+        PortableDeck document = service.prepareImport(source);
+        Deck imported = service.importDeck(document, document.deckName());
 
         assertEquals(1, storage.saveInvocations);
         assertTrue(imported.cardIds().isEmpty());
@@ -286,7 +288,8 @@ class KokoServiceTransferTest {
                 + "\"romaji\":\"ko\\u0304hi\\u0304\","
                 + "\"englishMeaning\":\"cafe\\u0301\"}]}");
 
-        Deck imported = service.importDeck(source);
+        PortableDeck document = service.prepareImport(source);
+        Deck imported = service.importDeck(document, document.deckName());
         VocabularyCard card = service.data().findVocabularyCard(imported.cardIds().get(0))
                 .orElseThrow();
 
@@ -326,7 +329,7 @@ class KokoServiceTransferTest {
         Path missing = temporaryDirectory.resolve("missing.json");
 
         for (Path rejected : List.of(source, duplicate, invalidMatch, invalidUnicode, missing)) {
-            assertThrows(DeckTransferException.class, () -> service.importDeck(rejected));
+            assertThrows(DeckTransferException.class, () -> service.prepareImport(rejected));
             assertEquals(savesBefore, storage.saveInvocations());
             assertSame(originalData, service.data());
             assertSame(card, service.data().findVocabularyCard(card.id()).orElseThrow());
@@ -349,7 +352,9 @@ class KokoServiceTransferTest {
                 + "\"cards\":[{\"hiragana\":\"ねこ\",\"romaji\":\"neko\","
                 + "\"englishMeaning\":\"cat\"}]}");
 
-        assertThrows(IllegalArgumentException.class, () -> service.importDeck(conflict));
+        PortableDeck conflictingDocument = service.prepareImport(conflict);
+        assertThrows(IllegalArgumentException.class, () ->
+                service.importDeck(conflictingDocument, conflictingDocument.deckName()));
         assertEquals(1, storage.saveInvocations());
         assertSame(originalData, service.data());
         assertSame(existing, service.data().findDeckById(existing.id()).orElseThrow());
@@ -358,13 +363,15 @@ class KokoServiceTransferTest {
 
         Path source = writeSource(Files.readString(conflict, StandardCharsets.UTF_8)
                 .replace(" aNiMaLs ", "Imported"));
-        Deck imported = service.importDeck(source);
+        PortableDeck document = service.prepareImport(source);
+        Deck imported = service.importDeck(document, document.deckName());
         KokoData importedData = service.data();
         KokoData importedValues = KokoDataSnapshots.copyOf(importedData);
         byte[] importedBytes = Files.readAllBytes(storagePath);
         byte[] sourceBytes = Files.readAllBytes(source);
 
-        assertThrows(IllegalArgumentException.class, () -> service.importDeck(source));
+        assertThrows(IllegalArgumentException.class, () ->
+                service.importDeck(document, document.deckName()));
         assertEquals(2, storage.saveInvocations());
         assertSame(importedData, service.data());
         assertSame(imported, service.data().findDeckById(imported.id()).orElseThrow());
@@ -451,7 +458,8 @@ class KokoServiceTransferTest {
                 + "\"cards\":[{\"hiragana\":\"ねこ\",\"romaji\":\"different\","
                 + "\"englishMeaning\":\"CAT\"},{\"hiragana\":\"ねこ\","
                 + "\"romaji\":\"neko\",\"englishMeaning\":\"kitten\"}]}");
-        Deck imported = service.importDeck(source);
+        PortableDeck document = service.prepareImport(source);
+        Deck imported = service.importDeck(document, document.deckName());
         UUID newId = imported.cardIds().get(1);
         assertNotEquals(existing.id(), newId);
         assertFreshProgress(service.data().findVocabularyCard(newId).orElseThrow(), FIRST_DATE);
@@ -515,7 +523,8 @@ class KokoServiceTransferTest {
 
         Path importedStorage = temporaryDirectory.resolve("other-library.json");
         KokoService recipient = new KokoService(new JsonStorage(importedStorage), FIRST_CLOCK);
-        Deck imported = recipient.importDeck(destination);
+        PortableDeck document = recipient.prepareImport(destination);
+        Deck imported = recipient.importDeck(document, document.deckName());
         assertNotEquals(deck.id(), imported.id());
         assertEquals(deck.name(), imported.name());
         assertEquals(List.of("dog", "cat"), imported.cardIds().stream()
