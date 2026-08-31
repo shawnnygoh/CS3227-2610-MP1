@@ -27,4 +27,4 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Build and check with Gradle
-        run: ./gradlew check
+        run: ./gradlew check shadowJar
