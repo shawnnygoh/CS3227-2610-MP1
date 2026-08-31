@@ -7,6 +7,7 @@ import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
 import koko.review.TypingSession;
@@ -25,6 +26,8 @@ public final class TypingReviewController {
     private Label progressLabel;
     @FXML
     private ProgressBar progressBar;
+    @FXML
+    private ScrollPane contentScrollPane;
     @FXML
     private VBox promptPanel;
     @FXML
@@ -223,6 +226,8 @@ public final class TypingReviewController {
             answerField.clear();
         }
         displayedCardId = prompt.cardId();
+        contentScrollPane.setHvalue(0);
+        contentScrollPane.setVvalue(0);
         meaningLabel.setText(prompt.englishMeaning());
         promptPanel.setVisible(true);
         promptPanel.setManaged(true);
@@ -247,8 +252,8 @@ public final class TypingReviewController {
         feedbackLabel.setText(feedback.outcome() == ReviewOutcome.CORRECT
                 ? "Correct" : feedback.outcome() == ReviewOutcome.SKIPPED
                 ? "Skipped" : "Incorrect");
-        promptPanel.setVisible(true);
-        promptPanel.setManaged(true);
+        promptPanel.setVisible(false);
+        promptPanel.setManaged(false);
         feedbackPanel.setVisible(true);
         feedbackPanel.setManaged(true);
         answerField.setText(feedback.enteredAnswer());

@@ -6,9 +6,11 @@
 <?import javafx.scene.control.MenuButton?>
 <?import javafx.scene.control.MenuItem?>
 <?import javafx.scene.control.RadioButton?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.SplitPane?>
 <?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
@@ -41,7 +43,8 @@
             </BorderPane>
             <Label text="Build a reusable Japanese vocabulary library and organize it into decks."
                    styleClass="subtitle" wrapText="true" />
-            <HBox alignment="CENTER_LEFT" spacing="10">
+            <FlowPane alignment="CENTER_LEFT" hgap="10" vgap="5" minHeight="-Infinity"
+                      styleClass="mode-controls">
                 <Label text="Review mode" styleClass="section-title" />
                 <RadioButton fx:id="flashcardModeButton" text="Flashcard"
                              mnemonicParsing="true" />
@@ -49,72 +52,93 @@
                              mnemonicParsing="true" />
                 <Label text="Applies to all review actions."
                        styleClass="section-hint" wrapText="true" />
-            </HBox>
+            </FlowPane>
         </VBox>
     </top>
     <center>
         <SplitPane dividerPositions="0.48" styleClass="management-split" minHeight="0">
             <items>
-                <VBox styleClass="panel" spacing="10" minHeight="0">
-                    <HBox alignment="CENTER_LEFT" spacing="8">
-                        <Label text="Global vocabulary" styleClass="section-title" HBox.hgrow="ALWAYS" />
-                        <Label text="Reusable across decks" styleClass="section-hint" />
-                    </HBox>
-                    <Label fx:id="vocabularyEmptyState"
-                           text="No vocabulary yet. Add your first Japanese word."
-                           styleClass="empty-state" wrapText="true" />
-                    <ListView fx:id="vocabularyList" minHeight="0" VBox.vgrow="ALWAYS"
-                              accessibleText="Global vocabulary cards" />
-                    <HBox spacing="8" minHeight="-Infinity">
-                        <Button fx:id="addCardButton" text="Add card" onAction="#addCard"
-                                styleClass="primary-button" mnemonicParsing="true" />
-                        <Button fx:id="reviewSelectedCardButton" text="Review selected"
-                                onAction="#reviewSelectedCard" styleClass="secondary-button"
-                                mnemonicParsing="true" />
-                        <Button fx:id="editCardButton" text="Edit" onAction="#editCard"
-                                styleClass="secondary-button" mnemonicParsing="true" />
-                        <Button fx:id="deleteCardButton" text="Delete" onAction="#deleteCard"
-                                styleClass="danger-button" mnemonicParsing="true" />
-                    </HBox>
-                </VBox>
+                <ScrollPane fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED"
+                            minWidth="0" minHeight="0" styleClass="management-scroll">
+                    <content>
+                        <VBox styleClass="panel" spacing="10" minWidth="0">
+                            <HBox alignment="CENTER_LEFT" spacing="8">
+                                <Label text="Global vocabulary" styleClass="section-title"
+                                       HBox.hgrow="ALWAYS" />
+                                <Label text="Reusable across decks" styleClass="section-hint" />
+                            </HBox>
+                            <Label fx:id="vocabularyEmptyState"
+                                   text="No vocabulary yet. Add your first Japanese word."
+                                   styleClass="empty-state" wrapText="true" />
+                            <ListView fx:id="vocabularyList" minHeight="80" prefHeight="180"
+                                      accessibleText="Global vocabulary cards" />
+                            <FlowPane alignment="CENTER_LEFT" hgap="8" vgap="6" minHeight="74"
+                                      styleClass="action-group">
+                                <Button fx:id="addCardButton" text="Add card" onAction="#addCard"
+                                        styleClass="primary-button" mnemonicParsing="true" />
+                                <Button fx:id="reviewSelectedCardButton" text="Review selected"
+                                        onAction="#reviewSelectedCard" styleClass="secondary-button"
+                                        mnemonicParsing="true" />
+                                <Button fx:id="editCardButton" text="Edit" onAction="#editCard"
+                                        styleClass="secondary-button" mnemonicParsing="true" />
+                                <Button fx:id="deleteCardButton" text="Delete" onAction="#deleteCard"
+                                        styleClass="danger-button" mnemonicParsing="true" />
+                            </FlowPane>
+                        </VBox>
+                    </content>
+                </ScrollPane>
                 <VBox styleClass="panel" spacing="6" minHeight="0">
                     <HBox alignment="CENTER_LEFT" spacing="8">
-                        <Label text="Deck selection" styleClass="section-title" HBox.hgrow="ALWAYS" />
-                        <Button fx:id="createDeckButton" text="New deck" onAction="#createDeck"
-                                styleClass="primary-button" mnemonicParsing="true" />
+                        <Label text="Deck selection" styleClass="section-title"
+                               HBox.hgrow="ALWAYS" />
+                        <Button fx:id="createDeckButton" text="New deck"
+                                onAction="#createDeck" styleClass="primary-button"
+                                mnemonicParsing="true" />
                     </HBox>
                     <Label fx:id="deckEmptyState"
                            text="No decks yet. Create one to group your cards."
                            styleClass="empty-state" wrapText="true" />
-                    <ListView fx:id="deckList" minHeight="60" prefHeight="120" maxHeight="180"
+                    <ListView fx:id="deckList" minHeight="40" prefHeight="120" maxHeight="180"
                               VBox.vgrow="ALWAYS" styleClass="deck-list" accessibleText="Study decks" />
-                    <HBox spacing="4" minHeight="-Infinity" styleClass="deck-actions">
+                    <FlowPane alignment="CENTER_LEFT" hgap="4" vgap="6" minHeight="74"
+                              styleClass="action-group deck-actions">
                         <Button fx:id="reviewDueButton" text="Review due"
                                 onAction="#reviewDueCards" styleClass="primary-button"
                                 minWidth="-Infinity" mnemonicParsing="true" />
-                        <Button fx:id="reviewAllButton" text="Review all" onAction="#reviewAllCards"
-                                styleClass="secondary-button" minWidth="-Infinity"
-                                mnemonicParsing="true" />
-                        <Button fx:id="renameDeckButton" text="Rename" onAction="#renameDeck"
-                                styleClass="secondary-button" minWidth="-Infinity"
-                                mnemonicParsing="true" />
-                        <Button fx:id="deleteDeckButton" text="Delete deck" onAction="#deleteDeck"
-                                styleClass="danger-button" minWidth="-Infinity"
-                                mnemonicParsing="true" />
-                    </HBox>
+                        <Button fx:id="reviewAllButton" text="Review all"
+                                onAction="#reviewAllCards" styleClass="secondary-button"
+                                minWidth="-Infinity" mnemonicParsing="true" />
+                        <Button fx:id="renameDeckButton" text="Rename"
+                                onAction="#renameDeck" styleClass="secondary-button"
+                                minWidth="-Infinity" mnemonicParsing="true" />
+                        <Button fx:id="deleteDeckButton" text="Delete deck"
+                                onAction="#deleteDeck" styleClass="danger-button"
+                                minWidth="-Infinity" mnemonicParsing="true" />
+                    </FlowPane>
                     <Separator />
-                    <Label fx:id="selectedDeckLabel" text="Select a deck to see its cards"
-                           styleClass="subsection-title" wrapText="true" />
-                    <!-- Keep card contents visible; only the lists scroll when space is limited. -->
-                    <ListView fx:id="deckCardList" minHeight="80" prefHeight="120" VBox.vgrow="ALWAYS"
-                              accessibleText="Cards in selected deck" />
-                    <HBox spacing="8" minHeight="-Infinity">
-                        <Button fx:id="addToDeckButton" text="Add existing card" onAction="#addCardToDeck"
-                                styleClass="primary-button" mnemonicParsing="true" />
-                        <Button fx:id="removeFromDeckButton" text="Remove card from deck"
-                                onAction="#removeCardFromDeck" styleClass="secondary-button"
+                    <ScrollPane fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED"
+                                minWidth="0" minHeight="45" prefViewportHeight="150"
+                                VBox.vgrow="ALWAYS" styleClass="deck-membership-scroll">
+                        <content>
+                            <VBox spacing="6" fillWidth="true" minWidth="0"
+                                  styleClass="deck-membership-content">
+                                <Label fx:id="selectedDeckLabel" text="Select a deck to see its cards"
+                                       styleClass="subsection-title" wrapText="true" minWidth="0"
+                                       maxWidth="1.7976931348623157E308" />
+                                <ListView fx:id="deckCardList" minHeight="80" prefHeight="120"
+                                          accessibleText="Cards in selected deck" />
+                            </VBox>
+                        </content>
+                    </ScrollPane>
+                    <FlowPane alignment="CENTER_LEFT" hgap="8" vgap="6" minHeight="34"
+                              styleClass="action-group">
+                        <Button fx:id="addToDeckButton" text="Add existing card"
+                                onAction="#addCardToDeck" styleClass="primary-button"
                                 mnemonicParsing="true" />
-                    </HBox>
+                        <Button fx:id="removeFromDeckButton" text="Remove card from deck"
+                                onAction="#removeCardFromDeck"
+                                styleClass="secondary-button" mnemonicParsing="true" />
+                    </FlowPane>
                 </VBox>
             </items>
         </SplitPane>

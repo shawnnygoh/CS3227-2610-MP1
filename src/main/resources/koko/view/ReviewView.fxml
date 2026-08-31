@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ProgressBar?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
@@ -19,41 +20,61 @@
         </VBox>
     </top>
     <center>
-        <VBox alignment="TOP_CENTER" spacing="18" styleClass="review-content"
+        <VBox alignment="TOP_CENTER" spacing="10" styleClass="review-content"
               fillWidth="true">
-            <VBox maxWidth="680" spacing="8" styleClass="review-progress">
-                <Label fx:id="progressLabel" text="Preparing review..." styleClass="progress-text" />
-                <ProgressBar fx:id="progressBar" progress="0" maxWidth="1.7976931348623157E308"
+            <VBox maxWidth="680" minHeight="40" spacing="8" styleClass="review-progress">
+                <Label fx:id="progressLabel" text="Preparing review..." styleClass="progress-text"
+                       maxWidth="1.7976931348623157E308" wrapText="true" />
+                <ProgressBar fx:id="progressBar" progress="0" minHeight="12" prefHeight="12"
+                             maxWidth="1.7976931348623157E308"
                              accessibleText="Review progress" />
             </VBox>
-            <VBox alignment="CENTER" maxWidth="680" minHeight="220" spacing="14"
-                  styleClass="prompt-card" VBox.vgrow="ALWAYS">
-                <VBox fx:id="promptPanel" alignment="CENTER" spacing="14">
-                    <Label text="Hiragana" styleClass="card-label" />
-                    <Label fx:id="promptLabel" text="" styleClass="hiragana-prompt"
-                           wrapText="true" textAlignment="CENTER" />
-                </VBox>
-                <HBox fx:id="answerPanel" alignment="TOP_CENTER" spacing="24"
-                      styleClass="answer-panel" visible="false" managed="false">
-                    <VBox alignment="TOP_CENTER" spacing="5" minWidth="0" prefWidth="0"
-                          HBox.hgrow="ALWAYS">
-                        <Label text="Romaji" styleClass="card-label" />
-                        <Label fx:id="romajiLabel" text="" styleClass="romaji-answer"
-                               wrapText="true" textAlignment="CENTER" />
+            <ScrollPane fx:id="contentScrollPane" fitToWidth="true" hbarPolicy="AS_NEEDED"
+                        vbarPolicy="AS_NEEDED"
+                        maxWidth="680" minWidth="0" minHeight="0" VBox.vgrow="ALWAYS"
+                        styleClass="review-scroll" accessibleText="Flashcard review content">
+                <content>
+                    <VBox alignment="TOP_CENTER" spacing="12" fillWidth="true" minWidth="0"
+                          styleClass="review-scroll-content">
+                        <VBox alignment="CENTER" maxWidth="680" minWidth="0" minHeight="220"
+                              spacing="14" styleClass="prompt-card">
+                            <VBox fx:id="promptPanel" alignment="CENTER" spacing="14"
+                                  minWidth="0">
+                                <Label text="Hiragana" styleClass="card-label" />
+                                <Label fx:id="promptLabel" text="" styleClass="hiragana-prompt"
+                                       maxWidth="1.7976931348623157E308" wrapText="true"
+                                       textAlignment="CENTER" />
+                            </VBox>
+                            <HBox fx:id="answerPanel" alignment="TOP_CENTER" spacing="24"
+                                  styleClass="answer-panel" minWidth="0" maxWidth="1.7976931348623157E308"
+                                  visible="false" managed="false">
+                                <VBox alignment="TOP_CENTER" spacing="5" minWidth="0" prefWidth="0"
+                                      HBox.hgrow="ALWAYS">
+                                    <Label text="Romaji" styleClass="card-label" />
+                                    <Label fx:id="romajiLabel" text="" styleClass="romaji-answer"
+                                           maxWidth="1.7976931348623157E308" wrapText="true"
+                                           textAlignment="CENTER" />
+                                </VBox>
+                                <VBox alignment="TOP_CENTER" spacing="5" minWidth="0" prefWidth="0"
+                                      HBox.hgrow="ALWAYS">
+                                    <Label text="English meaning" styleClass="card-label" />
+                                    <Label fx:id="meaningLabel" text="" styleClass="meaning-answer"
+                                           maxWidth="1.7976931348623157E308" wrapText="true"
+                                           textAlignment="CENTER" />
+                                </VBox>
+                            </HBox>
+                            <Label fx:id="summaryLabel" text="" styleClass="review-summary"
+                                   maxWidth="1.7976931348623157E308" wrapText="true"
+                                   textAlignment="CENTER" visible="false" managed="false" />
+                        </VBox>
+                        <Label fx:id="feedbackLabel" text="" styleClass="review-feedback"
+                               maxWidth="680" minWidth="0" wrapText="true"
+                               visible="false" managed="false" />
                     </VBox>
-                    <VBox alignment="TOP_CENTER" spacing="5" minWidth="0" prefWidth="0"
-                          HBox.hgrow="ALWAYS">
-                        <Label text="English meaning" styleClass="card-label" />
-                        <Label fx:id="meaningLabel" text="" styleClass="meaning-answer"
-                               wrapText="true" textAlignment="CENTER" />
-                    </VBox>
-                </HBox>
-                <Label fx:id="summaryLabel" text="" styleClass="review-summary"
-                       wrapText="true" visible="false" managed="false" />
-            </VBox>
-            <Label fx:id="feedbackLabel" text="" styleClass="review-feedback"
-                   maxWidth="680" wrapText="true" visible="false" managed="false" />
-            <HBox alignment="CENTER" spacing="10">
+                </content>
+            </ScrollPane>
+            <FlowPane alignment="CENTER" hgap="10" vgap="6" maxWidth="680" minHeight="-Infinity"
+                      styleClass="review-actions">
                 <Button fx:id="revealButton" text="Reveal" onAction="#reveal"
                         styleClass="primary-button" mnemonicParsing="true" defaultButton="true" />
                 <Button fx:id="correctButton" text="Correct" onAction="#markCorrect"
@@ -61,12 +82,8 @@
                 <Button fx:id="incorrectButton" text="Incorrect" onAction="#markIncorrect"
                         styleClass="incorrect-button" mnemonicParsing="true" />
                 <Button fx:id="stopButton" text="Stop" onAction="#stop"
-                        styleClass="danger-button" mnemonicParsing="true">
-                    <HBox.margin>
-                        <Insets left="14" />
-                    </HBox.margin>
-                </Button>
-            </HBox>
+                        styleClass="danger-button" mnemonicParsing="true" />
+            </FlowPane>
         </VBox>
     </center>
     <bottom>

@@ -18,9 +18,13 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 import javafx.fxml.FXML;
+import javafx.scene.control.Button;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.ScrollPane;
 import koko.controller.MainController;
+import koko.controller.ReviewController;
+import koko.controller.TypingReviewController;
 
 /**
  * Verifies that views and stylesheets needed by the application are packaged.
@@ -53,6 +57,25 @@ class ResourceWiringTest {
         assertAction(document, "exportSelectedDeckMenuItem", "#exportSelectedDeck");
     }
 
+    @Test
+    void reviewViewsKeepScrollableContentAndActionWiring() throws Exception {
+        Document flashcard = parseResource("/koko/view/ReviewView.fxml");
+        assertEquals(ReviewController.class.getName(), flashcard.getDocumentElement()
+                .getAttributeNS("http://javafx.com/fxml/1", "controller"));
+        assertInjectedField(flashcard, "contentScrollPane", ReviewController.class,
+                ScrollPane.class);
+        assertControllerAction(flashcard, "revealButton", "#reveal", "Button",
+                ReviewController.class, Button.class);
+
+        Document typing = parseResource("/koko/view/TypingReviewView.fxml");
+        assertEquals(TypingReviewController.class.getName(), typing.getDocumentElement()
+                .getAttributeNS("http://javafx.com/fxml/1", "controller"));
+        assertInjectedField(typing, "contentScrollPane", TypingReviewController.class,
+                ScrollPane.class);
+        assertControllerAction(typing, "nextButton", "#next", "Button",
+                TypingReviewController.class, Button.class);
+    }
+
     /**
      * Checks that a menu item's FXML action resolves to an annotated controller handler.
      *
@@ -64,18 +87,33 @@ class ResourceWiringTest {
      */
     private static void assertAction(Document document, String fxId, String action)
             throws NoSuchFieldException, NoSuchMethodException {
+        assertControllerAction(document, fxId, action, "MenuItem", MainController.class,
+                MenuItem.class);
+    }
+
+    private static void assertControllerAction(Document document, String fxId, String action,
+            String expectedTag, Class<?> controllerClass, Class<?> fieldType)
+            throws NoSuchFieldException, NoSuchMethodException {
         Element element = elementWithFxId(document, fxId);
         assertNotNull(element);
-        assertEquals("MenuItem", element.getTagName());
+        assertEquals(expectedTag, element.getTagName());
         assertEquals(action, element.getAttribute("onAction"));
-        assertInjectedField(fxId, MenuItem.class);
-        Method handler = MainController.class.getDeclaredMethod(action.substring(1));
+        assertInjectedField(document, fxId, controllerClass, fieldType);
+        Method handler = controllerClass.getDeclaredMethod(action.substring(1));
         assertTrue(handler.isAnnotationPresent(FXML.class));
         assertEquals(void.class, handler.getReturnType());
     }
 
     private static void assertInjectedField(String fxId, Class<?> expectedType) throws NoSuchFieldException {
-        Field field = MainController.class.getDeclaredField(fxId);
+        assertInjectedField(null, fxId, MainController.class, expectedType);
+    }
+
+    private static void assertInjectedField(Document document, String fxId,
+            Class<?> controllerClass, Class<?> expectedType) throws NoSuchFieldException {
+        if (document != null) {
+            assertNotNull(elementWithFxId(document, fxId));
+        }
+        Field field = controllerClass.getDeclaredField(fxId);
         assertEquals(expectedType, field.getType());
         assertTrue(field.isAnnotationPresent(FXML.class));
     }

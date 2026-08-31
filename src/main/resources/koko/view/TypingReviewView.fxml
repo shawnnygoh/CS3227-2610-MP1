@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ProgressBar?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
@@ -20,42 +21,62 @@
         </VBox>
     </top>
     <center>
-        <VBox alignment="TOP_CENTER" spacing="14" styleClass="review-content"
+        <VBox alignment="TOP_CENTER" spacing="10" styleClass="review-content"
               fillWidth="true">
-            <VBox maxWidth="680" spacing="8" styleClass="review-progress">
+            <VBox maxWidth="680" minHeight="40" spacing="8" styleClass="review-progress">
                 <Label fx:id="progressLabel" text="Preparing typing review..."
-                       styleClass="progress-text" />
-                <ProgressBar fx:id="progressBar" progress="0"
+                       styleClass="progress-text" maxWidth="1.7976931348623157E308"
+                       wrapText="true" />
+                <ProgressBar fx:id="progressBar" progress="0" minHeight="12" prefHeight="12"
                              maxWidth="1.7976931348623157E308"
                              accessibleText="Typing review progress" />
             </VBox>
-            <VBox alignment="CENTER" maxWidth="680" minHeight="220" spacing="12"
-                  styleClass="prompt-card" VBox.vgrow="ALWAYS">
-                <VBox fx:id="promptPanel" alignment="CENTER" spacing="12">
-                    <Label text="English meaning" styleClass="card-label" />
-                    <Label fx:id="meaningLabel" text="" styleClass="typing-meaning"
-                           wrapText="true" textAlignment="CENTER" />
-                    <TextField fx:id="answerField" promptText="Type Hiragana here"
-                               onAction="#submit"
-                               maxWidth="420" accessibleText="Hiragana answer" />
-                </VBox>
-                <VBox fx:id="feedbackPanel" alignment="CENTER" spacing="7"
-                      styleClass="typing-feedback-panel" visible="false" managed="false">
-                    <Label text="Your answer" styleClass="card-label" />
-                    <Label fx:id="enteredAnswerLabel" text="" styleClass="typing-answer"
-                           wrapText="true" />
-                    <Label text="Expected Hiragana" styleClass="card-label" />
-                    <Label fx:id="expectedAnswerLabel" text="" styleClass="typing-expected"
-                           wrapText="true" />
-                    <Label fx:id="feedbackLabel" text="" styleClass="review-feedback"
-                           wrapText="true" />
-                </VBox>
-                <Label fx:id="summaryLabel" text="" styleClass="review-summary"
-                       wrapText="true" visible="false" managed="false" />
-            </VBox>
-            <Label fx:id="errorLabel" text="" styleClass="typing-error"
-                   maxWidth="680" wrapText="true" visible="false" managed="false" />
-            <HBox alignment="CENTER" spacing="10">
+            <ScrollPane fx:id="contentScrollPane" fitToWidth="true" hbarPolicy="AS_NEEDED"
+                        vbarPolicy="AS_NEEDED" maxWidth="680" minWidth="0" minHeight="0"
+                        VBox.vgrow="ALWAYS" styleClass="review-scroll"
+                        accessibleText="Typing review content">
+                <content>
+                    <VBox alignment="TOP_CENTER" spacing="12" fillWidth="true" minWidth="0"
+                          styleClass="review-scroll-content">
+                        <VBox alignment="CENTER" maxWidth="680" minWidth="0" minHeight="220"
+                              spacing="12" styleClass="prompt-card">
+                            <VBox fx:id="promptPanel" alignment="CENTER" spacing="12" minWidth="0">
+                                <Label text="English meaning" styleClass="card-label" />
+                                <Label fx:id="meaningLabel" text="" styleClass="typing-meaning"
+                                       maxWidth="1.7976931348623157E308" wrapText="true"
+                                       textAlignment="CENTER" />
+                                <TextField fx:id="answerField" promptText="Type Hiragana here"
+                                           onAction="#submit" maxWidth="420"
+                                           accessibleText="Hiragana answer" />
+                            </VBox>
+                            <VBox fx:id="feedbackPanel" alignment="CENTER" spacing="7"
+                                  styleClass="typing-feedback-panel" minWidth="0"
+                                  maxWidth="1.7976931348623157E308" visible="false" managed="false">
+                                <Label text="Your answer" styleClass="card-label" />
+                                <Label fx:id="enteredAnswerLabel" text="" styleClass="typing-answer"
+                                       maxWidth="1.7976931348623157E308" wrapText="true"
+                                       textAlignment="CENTER" />
+                                <Label text="Expected Hiragana" styleClass="card-label"
+                                       textAlignment="CENTER" />
+                                <Label fx:id="expectedAnswerLabel" text="" styleClass="typing-expected"
+                                       maxWidth="1.7976931348623157E308" wrapText="true"
+                                       textAlignment="CENTER" />
+                                <Label fx:id="feedbackLabel" text="" styleClass="review-feedback"
+                                       maxWidth="1.7976931348623157E308" wrapText="true"
+                                       textAlignment="CENTER" />
+                            </VBox>
+                            <Label fx:id="summaryLabel" text="" styleClass="review-summary"
+                                   maxWidth="1.7976931348623157E308" wrapText="true"
+                                   textAlignment="CENTER" visible="false" managed="false" />
+                        </VBox>
+                        <Label fx:id="errorLabel" text="" styleClass="typing-error"
+                               maxWidth="680" minWidth="0" wrapText="true"
+                               visible="false" managed="false" />
+                    </VBox>
+                </content>
+            </ScrollPane>
+            <FlowPane alignment="CENTER" hgap="10" vgap="6" maxWidth="680" minHeight="-Infinity"
+                      styleClass="review-actions">
                 <Button fx:id="submitButton" text="Submit" onAction="#submit"
                         styleClass="primary-button" mnemonicParsing="true" />
                 <Button fx:id="skipButton" text="Skip" onAction="#skip"
@@ -63,12 +84,8 @@
                 <Button fx:id="nextButton" text="Next" onAction="#next"
                         styleClass="primary-button" mnemonicParsing="true" />
                 <Button fx:id="stopButton" text="Stop" onAction="#stop"
-                        styleClass="danger-button" mnemonicParsing="true">
-                    <HBox.margin>
-                        <Insets left="14" />
-                    </HBox.margin>
-                </Button>
-            </HBox>
+                        styleClass="danger-button" mnemonicParsing="true" />
+            </FlowPane>
         </VBox>
     </center>
     <bottom>

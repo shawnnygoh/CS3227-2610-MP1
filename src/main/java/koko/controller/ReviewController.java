@@ -7,6 +7,7 @@ import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import koko.review.FlashcardSession;
@@ -26,6 +27,8 @@ public final class ReviewController {
     private Label progressLabel;
     @FXML
     private ProgressBar progressBar;
+    @FXML
+    private ScrollPane contentScrollPane;
     @FXML
     private VBox promptPanel;
     @FXML
@@ -189,6 +192,8 @@ public final class ReviewController {
             return;
         }
         displayedCardId = prompt.cardId();
+        contentScrollPane.setHvalue(0);
+        contentScrollPane.setVvalue(0);
         promptPanel.setVisible(true);
         promptPanel.setManaged(true);
         promptLabel.setText(prompt.hiragana());

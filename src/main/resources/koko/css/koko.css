@@ -56,6 +56,10 @@
     -fx-text-fill: #789084;
 }
 
+.mode-controls {
+    -fx-padding: 2 0 0 0;
+}
+
 .subsection-title {
     -fx-font-size: 14px;
     -fx-font-weight: bold;
@@ -79,6 +83,7 @@
 .list-cell {
     -fx-padding: 9 10;
     -fx-text-fill: #2d4238;
+    -fx-wrap-text: true;
 }
 
 .deck-list .list-cell {
@@ -99,6 +104,21 @@
 
 .deck-actions .button {
     -fx-padding: 7 6;
+}
+
+.action-group {
+    -fx-padding: 0 0 2 0;
+}
+
+.management-scroll,
+.management-scroll > .viewport,
+.deck-membership-scroll,
+.deck-membership-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
+.deck-membership-content {
+    -fx-padding: 0 0 2 0;
 }
 
 .primary-button {
@@ -139,8 +159,22 @@
     -fx-padding: 24;
 }
 
+.review-scroll,
+.review-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
+.review-scroll-content {
+    -fx-padding: 0 0 2 0;
+}
+
+.review-actions {
+    -fx-padding: 2 0 0 0;
+}
+
 .review-progress {
     -fx-padding: 4 0 0 0;
+    -fx-min-height: 40;
 }
 
 .progress-text {
@@ -151,6 +185,8 @@
 
 .progress-bar {
     -fx-accent: #347b58;
+    -fx-min-height: 12;
+    -fx-pref-height: 12;
 }
 
 .prompt-card {
@@ -166,12 +202,14 @@
     -fx-font-size: 12px;
     -fx-font-weight: bold;
     -fx-text-fill: #789084;
+    -fx-alignment: CENTER;
 }
 
 .hiragana-prompt {
     -fx-font-size: 44px;
     -fx-font-weight: bold;
     -fx-text-fill: #245743;
+    -fx-alignment: CENTER;
 }
 
 .answer-panel {
@@ -184,17 +222,20 @@
     -fx-font-size: 22px;
     -fx-font-weight: bold;
     -fx-text-fill: #2f5d50;
+    -fx-alignment: CENTER;
 }
 
 .meaning-answer {
     -fx-font-size: 18px;
     -fx-text-fill: #365f50;
+    -fx-alignment: CENTER;
 }
 
 .typing-meaning {
     -fx-font-size: 32px;
     -fx-font-weight: bold;
     -fx-text-fill: #245743;
+    -fx-alignment: CENTER;
 }
 
 .typing-feedback-panel {
@@ -206,12 +247,14 @@
 .typing-answer {
     -fx-font-size: 20px;
     -fx-text-fill: #365f50;
+    -fx-alignment: CENTER;
 }
 
 .typing-expected {
     -fx-font-size: 28px;
     -fx-font-weight: bold;
     -fx-text-fill: #2f5d50;
+    -fx-alignment: CENTER;
 }
 
 .typing-error {
@@ -219,6 +262,7 @@
     -fx-background-radius: 7;
     -fx-padding: 10;
     -fx-text-fill: #9a463e;
+    -fx-alignment: CENTER;
 }
 
 .review-summary {
@@ -226,6 +270,7 @@
     -fx-font-weight: bold;
     -fx-line-spacing: 4px;
     -fx-text-fill: #2f5d50;
+    -fx-alignment: CENTER;
 }
 
 .review-feedback {
@@ -233,6 +278,7 @@
     -fx-background-radius: 7;
     -fx-padding: 10;
     -fx-text-fill: #81552d;
+    -fx-alignment: CENTER;
 }
 
 .correct-button {

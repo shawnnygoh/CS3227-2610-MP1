@@ -175,30 +175,45 @@ public final class MainController {
                 selectedMode = Mode.TYPING;
             }
         });
-        vocabularyList.setCellFactory(list -> new ListCell<>() {
-            @Override
-            protected void updateItem(VocabularyCard card, boolean empty) {
-                super.updateItem(card, empty);
-                setText(empty || card == null ? null
-                        : card.hiragana() + "  ·  " + card.romaji()
-                                + "  —  " + card.englishMeaning());
-            }
+        vocabularyList.setCellFactory(list -> {
+            ListCell<VocabularyCard> cell = new ListCell<>() {
+                @Override
+                protected void updateItem(VocabularyCard card, boolean empty) {
+                    super.updateItem(card, empty);
+                    setText(empty || card == null ? null
+                            : card.hiragana() + "  ·  " + card.romaji()
+                                    + "  —  " + card.englishMeaning());
+                }
+            };
+            cell.setWrapText(true);
+            cell.setMaxWidth(Double.MAX_VALUE);
+            return cell;
         });
-        deckList.setCellFactory(list -> new ListCell<>() {
-            @Override
-            protected void updateItem(Deck deck, boolean empty) {
-                super.updateItem(deck, empty);
-                setText(empty || deck == null ? null : deck.name());
-            }
+        deckList.setCellFactory(list -> {
+            ListCell<Deck> cell = new ListCell<>() {
+                @Override
+                protected void updateItem(Deck deck, boolean empty) {
+                    super.updateItem(deck, empty);
+                    setText(empty || deck == null ? null : deck.name());
+                }
+            };
+            cell.setWrapText(true);
+            cell.setMaxWidth(Double.MAX_VALUE);
+            return cell;
         });
-        deckCardList.setCellFactory(list -> new ListCell<>() {
-            @Override
-            protected void updateItem(VocabularyCard card, boolean empty) {
-                super.updateItem(card, empty);
-                setText(empty || card == null ? null
-                        : card.hiragana() + "  ·  " + card.romaji()
-                                + "  —  " + card.englishMeaning());
-            }
+        deckCardList.setCellFactory(list -> {
+            ListCell<VocabularyCard> cell = new ListCell<>() {
+                @Override
+                protected void updateItem(VocabularyCard card, boolean empty) {
+                    super.updateItem(card, empty);
+                    setText(empty || card == null ? null
+                            : card.hiragana() + "  ·  " + card.romaji()
+                                    + "  —  " + card.englishMeaning());
+                }
+            };
+            cell.setWrapText(true);
+            cell.setMaxWidth(Double.MAX_VALUE);
+            return cell;
         });
 
         vocabularyList.getSelectionModel().selectedItemProperty()
