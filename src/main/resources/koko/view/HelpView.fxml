@@ -11,61 +11,54 @@
     <content>
         <VBox spacing="22" minWidth="0" styleClass="help-content">
             <VBox spacing="8" minWidth="0">
-                <Label text="Vocabulary and decks" styleClass="subsection-title" />
+                <Label text="Cards and decks" styleClass="subsection-title" />
                 <Label wrapText="true" minHeight="-Infinity"
-                       text="Card fields must be single-line text. Surrounding whitespace is trimmed, but embedded tabs, line breaks, and control characters are rejected. If a saved file contains invalid text, Koko leaves it untouched: correct or restore the file, then restart." />
+                       text="Your library owns every card. A deck only points at cards, so one word can sit in several decks and still has a single shared progress." />
                 <Label wrapText="true" minHeight="-Infinity"
-                       text="Add and edit words in Global vocabulary. Select a deck to see its cards, then use Add existing card to add a word from your library." />
+                       text="Add and edit words under Global vocabulary. Select a deck, then use Add existing card to put a word into it." />
                 <Label wrapText="true" minHeight="-Infinity"
-                       text="A word can belong to several decks or none. You can rename decks. Removing a card from a deck, or deleting a deck, keeps the global cards. Deleting a global card removes it from every deck and asks for confirmation." />
-            </VBox>
-            <VBox spacing="8" minWidth="0">
-                <Label text="Transfer decks" styleClass="subsection-title" />
-                <Label wrapText="true" minHeight="-Infinity"
-                       text="Use Transfer to import or export one deck as UTF-8 JSON. Import creates one deck and keeps card membership order. Portable transfer is vocabulary-only: each card contains Hiragana, Romaji, and English meaning, not IDs or learning progress. Empty decks are valid." />
-                <Label wrapText="true" minHeight="-Infinity"
-                       text="Import first validates the complete file, then lets you confirm or edit the imported deck name. The filename and embedded deck name are separate. Blank or case-insensitive conflicting names stay in the dialog for correction. Import reuses matching global vocabulary and keeps its text and progress. Only new vocabulary starts with fresh progress in both modes and is due today. Invalid or unsupported documents and duplicate vocabulary within the file are rejected without changing your data." />
-                <Label wrapText="true" minHeight="-Infinity"
-                       text="Export applies to the selected deck, including an empty deck. Koko suggests a JSON filename from the deck name, but you can edit it; this changes only the file destination, not the embedded deck name. The native save dialog asks before replacing an existing file; accepting that prompt replaces the confirmed final destination, while canceling or closing it exports nothing. If adding or correcting .json points to a different existing file, the native save dialog opens again for that destination. Koko protects its configured internal library and aliases, rejects detected destination changes, and requires supported atomic replacement. Safe export failures are recoverable and preserve existing files; correct the issue and choose the destination again. Canceling either file chooser or the import-name dialog leaves your data and selection unchanged." />
+                       text="Removing a card from a deck, or deleting a deck, keeps your words. Deleting a card under Global vocabulary removes it from every deck." />
             </VBox>
             <VBox spacing="10" minWidth="0">
                 <Label text="Choose a review" styleClass="subsection-title" />
-                <VBox spacing="3" minWidth="0">
-                    <Label text="Review mode" styleClass="help-action" />
-                    <Label wrapText="true" minHeight="-Infinity"
-                           text="Choose Flashcard or Typing for how you answer. Review due, Review all, and Review selected choose which cards to review." />
-                </VBox>
+                <Label wrapText="true" minHeight="-Infinity"
+                       text="Pick Flashcard or Typing for how you answer, then pick which cards:" />
                 <VBox spacing="3" minWidth="0">
                     <Label text="Review due" styleClass="help-action" />
                     <Label wrapText="true" minHeight="-Infinity"
-                           text="Cards in the selected deck whose chosen mode is due today or earlier, oldest due first. Equal due dates follow deck order." />
+                           text="Cards in the selected deck that are due today or earlier, oldest first." />
                 </VBox>
                 <VBox spacing="3" minWidth="0">
                     <Label text="Review all" styleClass="help-action" />
                     <Label wrapText="true" minHeight="-Infinity"
-                           text="Every card in the selected deck once in deck order, including cards scheduled for later. Return Home to start another session anytime." />
+                           text="Every card in the selected deck, in deck order, due or not." />
                 </VBox>
                 <VBox spacing="3" minWidth="0">
                     <Label text="Review selected" styleClass="help-action" />
                     <Label wrapText="true" minHeight="-Infinity"
-                           text="One selected global card, even if it is not due or does not belong to a deck." />
+                           text="One card chosen in Global vocabulary, due or not." />
                 </VBox>
             </VBox>
             <VBox spacing="8" minWidth="0">
                 <Label text="During a review" styleClass="subsection-title" />
                 <Label wrapText="true" minHeight="-Infinity"
-                       text="Read the Hiragana, then choose Reveal to see Romaji and English meaning. Only then choose Correct or Incorrect. Incorrect cards are not repeated in the same session." />
+                       text="Flashcard: choose Reveal to see the Romaji and meaning, then mark Correct or Incorrect." />
                 <Label wrapText="true" minHeight="-Infinity"
-                       text="In English-to-Hiragana Typing, enter the exact Hiragana (surrounding whitespace and NFC-equivalent text are accepted) and choose Submit, or choose Skip. Both record an attempt and show feedback. Choose Next to advance; Stop ends the session without changing unanswered cards." />
+                       text="Typing: enter the exact Hiragana and choose Submit, or choose Skip. Both show feedback; choose Next to continue." />
                 <Label wrapText="true" minHeight="-Infinity"
-                       text="Stop leaves unanswered cards unchanged. After stopping or finishing, choose Back to Home." />
+                       text="Stop ends the session and leaves unanswered cards unchanged. Then choose Back to Home." />
             </VBox>
             <VBox spacing="8" minWidth="0">
                 <Label text="Progress and saving" styleClass="subsection-title" />
                 <Label wrapText="true" minHeight="-Infinity"
-                       text="Flashcard progress and Typing progress are independent, and each is shared across decks. Each mode stores mastery and its next due date. Every recorded outcome updates only the chosen mode's progress from the date you answer. Early reviews in either mode change mastery and scheduling. A skipped typing outcome leaves mastery unchanged, counts as a skipped attempt in the current session, and is due tomorrow." />
+                       text="Flashcard and Typing progress are separate, and each is shared across decks. A correct answer raises mastery up to 5 and pushes the next review out by 1, 3, 7, 14, then 30 days. Incorrect lowers mastery; incorrect and skipped cards return tomorrow." />
                 <Label wrapText="true" minHeight="-Infinity"
-                       text="Koko saves each outcome automatically. If saving fails, no progress is recorded. Retry Correct or Incorrect in Flashcard, or Submit or Skip in Typing. You can also choose Stop." />
+                       text="Koko saves automatically after every change. If a save fails, nothing is recorded: fix the problem, then retry the same action or choose Stop." />
+            </VBox>
+            <VBox spacing="8" minWidth="0">
+                <Label text="Transfer decks" styleClass="subsection-title" />
+                <Label wrapText="true" minHeight="-Infinity"
+                       text="Transfer imports or exports one deck as a JSON file holding words only, never learning progress. Import checks the whole file first, lets you confirm the deck name, and reuses words you already have along with their progress." />
             </VBox>
         </VBox>
     </content>
