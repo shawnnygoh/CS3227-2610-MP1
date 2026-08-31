@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
@@ -808,9 +809,9 @@ public final class MainController {
         return startupError == null && !reviewActive();
     }
 
-    private void startReview(SessionFactory sessionFactory, String guidance) {
+    private void startReview(Supplier<FlashcardSession> sessionFactory, String guidance) {
         try {
-            FlashcardSession session = sessionFactory.create();
+            FlashcardSession session = sessionFactory.get();
             loadReviewView(session, guidance);
         } catch (IllegalArgumentException | NullPointerException exception) {
             showError("Review could not start", exception.getMessage()
@@ -838,9 +839,9 @@ public final class MainController {
         setGuidance(guidance);
     }
 
-    private void startTypingReview(TypingSessionFactory sessionFactory, String guidance) {
+    private void startTypingReview(Supplier<TypingSession> sessionFactory, String guidance) {
         try {
-            TypingSession session = sessionFactory.create();
+            TypingSession session = sessionFactory.get();
             loadTypingReviewView(session, guidance);
         } catch (IllegalArgumentException | NullPointerException exception) {
             showError("Typing review could not start", exception.getMessage()
@@ -868,39 +869,64 @@ public final class MainController {
         setGuidance(guidance);
     }
 
+    /**
+     * Restores the management screen once a review session has finished.
+     *
+     * <p>The review controllers call this only after their session reaches a
+     * terminal state; they stop and re-render an active session themselves. The
+     * active-session branch here is therefore defensive: it stops the session and
+     * returns without swapping the scene, leaving all rendering to the review
+     * controller that is still displayed.
+     */
     private void returnToManagement() {
         if (!reviewActive() || managementScene == null) {
             return;
         }
+        String summary;
         if (activeReview != null) {
             if (activeReview.state() == FlashcardSession.State.PROMPT
                     || activeReview.state() == FlashcardSession.State.ANSWER_REVEALED) {
                 activeReview.stop();
                 return;
             }
-            FlashcardSession.Summary summary = activeReview.summary();
+            summary = describe(activeReview.summary());
             activeReview = null;
-            managementScene.setRoot(managementRoot);
-            refreshViews();
-            setGuidance("Returned to Home: " + summary.attempted()
-                    + " attempted, " + summary.correct() + " correct, "
-                    + summary.incorrect() + " incorrect, " + summary.remaining() + " remaining.");
         } else {
             if (activeTypingReview.state() == TypingSession.State.PROMPT
                     || activeTypingReview.state() == TypingSession.State.FEEDBACK) {
                 activeTypingReview.stop(activeTypingReview.currentCardId().orElseThrow());
                 return;
             }
-            TypingSession.Summary summary = activeTypingReview.summary();
+            summary = describe(activeTypingReview.summary());
             activeTypingReview = null;
-            managementScene.setRoot(managementRoot);
-            refreshViews();
-            setGuidance("Returned to Home: " + summary.attempted()
-                    + " attempted, " + summary.correct() + " correct, "
-                    + summary.incorrect() + " incorrect, " + summary.skipped()
-                    + " skipped, " + summary.remaining() + " remaining.");
         }
+        managementScene.setRoot(managementRoot);
+        refreshViews();
+        setGuidance("Returned to Home: " + summary);
         managementScene = null;
+    }
+
+    /**
+     * Describes a finished flashcard session for the guidance area.
+     *
+     * @param summary summary taken from the finished session.
+     * @return counts phrased for the learner.
+     */
+    private static String describe(FlashcardSession.Summary summary) {
+        return summary.attempted() + " attempted, " + summary.correct() + " correct, "
+                + summary.incorrect() + " incorrect, " + summary.remaining() + " remaining.";
+    }
+
+    /**
+     * Describes a finished typing session, which also reports skipped cards.
+     *
+     * @param summary summary taken from the finished session.
+     * @return counts phrased for the learner.
+     */
+    private static String describe(TypingSession.Summary summary) {
+        return summary.attempted() + " attempted, " + summary.correct() + " correct, "
+                + summary.incorrect() + " incorrect, " + summary.skipped()
+                + " skipped, " + summary.remaining() + " remaining.";
     }
 
     private boolean reviewActive() {
@@ -961,16 +987,6 @@ public final class MainController {
     @FunctionalInterface
     private interface Mutation {
         void run() throws StorageException;
-    }
-
-    @FunctionalInterface
-    private interface SessionFactory {
-        FlashcardSession create();
-    }
-
-    @FunctionalInterface
-    private interface TypingSessionFactory {
-        TypingSession create();
     }
 
     private record CardInput(String hiragana, String romaji, String englishMeaning) {
