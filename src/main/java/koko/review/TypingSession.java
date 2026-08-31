@@ -112,14 +112,12 @@ public final class TypingSession {
      *
      * @param service service holding the selected card.
      * @param cardId selected global card.
-     * @param clock clock used to establish the session start date.
      * @return a session containing the selected card.
      * @throws IllegalArgumentException if the card does not exist.
      * @throws NullPointerException if an argument is null.
      */
-    public static TypingSession forCard(KokoService service, UUID cardId, Clock clock) {
+    public static TypingSession forCard(KokoService service, UUID cardId) {
         KokoService checkedService = Objects.requireNonNull(service, "Service cannot be null");
-        Objects.requireNonNull(clock, "Clock cannot be null");
         UUID checkedCardId = Objects.requireNonNull(cardId, "Card ID cannot be null");
         requireCardForStart(checkedService, checkedCardId);
         return new TypingSession(checkedService, List.of(checkedCardId));
@@ -133,16 +131,13 @@ public final class TypingSession {
      *
      * @param service service holding the current global cards and decks.
      * @param deckId selected deck.
-     * @param clock clock used to establish the session start date.
      * @return an all-card deck session.
      * @throws IllegalArgumentException if the deck or a referenced card does not exist.
      * @throws NullPointerException if an argument is null.
      */
-    public static TypingSession forAllCardsInDeck(KokoService service, UUID deckId,
-            Clock clock) {
+    public static TypingSession forAllCardsInDeck(KokoService service, UUID deckId) {
         KokoService checkedService = Objects.requireNonNull(service, "Service cannot be null");
         UUID checkedDeckId = Objects.requireNonNull(deckId, "Deck ID cannot be null");
-        Objects.requireNonNull(clock, "Clock cannot be null");
         return new TypingSession(checkedService, allCardIds(checkedService, checkedDeckId));
     }
 

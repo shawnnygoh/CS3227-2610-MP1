@@ -50,29 +50,25 @@ class FlashcardSessionTest {
         KokoData originalData = context.service.data();
 
         assertThrows(IllegalArgumentException.class, () ->
-                FlashcardSession.forCard(context.service, missingId, FIXED_CLOCK));
+                FlashcardSession.forCard(context.service, missingId));
         assertThrows(IllegalArgumentException.class, () ->
                 FlashcardSession.forDeck(context.service, missingId, FIXED_CLOCK));
         assertThrows(NullPointerException.class, () ->
-                FlashcardSession.forCard(null, missingId, FIXED_CLOCK));
+                FlashcardSession.forCard(null, missingId));
         assertThrows(NullPointerException.class, () ->
                 FlashcardSession.forDeck(null, missingId, FIXED_CLOCK));
         assertThrows(NullPointerException.class, () ->
-                FlashcardSession.forCard(context.service, null, FIXED_CLOCK));
+                FlashcardSession.forCard(context.service, null));
         assertThrows(NullPointerException.class, () ->
                 FlashcardSession.forDeck(context.service, null, FIXED_CLOCK));
         assertThrows(NullPointerException.class, () ->
-                FlashcardSession.forCard(context.service, missingId, null));
-        assertThrows(NullPointerException.class, () ->
                 FlashcardSession.forDeck(context.service, missingId, null));
         assertThrows(NullPointerException.class, () ->
-                FlashcardSession.forAllCardsInDeck(null, missingId, FIXED_CLOCK));
+                FlashcardSession.forAllCardsInDeck(null, missingId));
         assertThrows(NullPointerException.class, () ->
-                FlashcardSession.forAllCardsInDeck(context.service, null, FIXED_CLOCK));
-        assertThrows(NullPointerException.class, () ->
-                FlashcardSession.forAllCardsInDeck(context.service, missingId, null));
+                FlashcardSession.forAllCardsInDeck(context.service, null));
         assertThrows(IllegalArgumentException.class, () ->
-                FlashcardSession.forAllCardsInDeck(context.service, missingId, FIXED_CLOCK));
+                FlashcardSession.forAllCardsInDeck(context.service, missingId));
 
         assertSame(originalData, context.service.data());
         assertEquals(0, context.storage.saveInvocations);
@@ -106,7 +102,7 @@ class FlashcardSessionTest {
         int savesBeforeSession = context.storage.saveInvocations;
 
         FlashcardSession session = FlashcardSession.forAllCardsInDeck(
-                context.service, deck.id(), FIXED_CLOCK);
+                context.service, deck.id());
         List<UUID> order = new ArrayList<>();
         while (session.state() == FlashcardSession.State.PROMPT) {
             UUID cardId = session.currentCardId().orElseThrow();
@@ -131,7 +127,7 @@ class FlashcardSessionTest {
         Deck futureDeck = context.service.createDeck("Future");
         context.service.addCardToDeck(futureDeck.id(), future.id());
         FlashcardSession futureSession = FlashcardSession.forAllCardsInDeck(
-                context.service, futureDeck.id(), FIXED_CLOCK);
+                context.service, futureDeck.id());
         assertEquals(FlashcardSession.State.PROMPT, futureSession.state());
         futureSession.reveal(future.id());
         futureSession.submit(future.id(), ReviewOutcome.CORRECT);
@@ -140,7 +136,7 @@ class FlashcardSessionTest {
         Deck emptyDeck = context.service.createDeck("Empty");
         int savesBeforeEmptySession = context.storage.saveInvocations;
         FlashcardSession emptySession = FlashcardSession.forAllCardsInDeck(
-                context.service, emptyDeck.id(), FIXED_CLOCK);
+                context.service, emptyDeck.id());
 
         assertEquals(FlashcardSession.State.COMPLETED, emptySession.state());
         assertEquals(new FlashcardSession.Summary(0, 0, 0, 0, 0, false), emptySession.summary());
@@ -188,7 +184,7 @@ class FlashcardSessionTest {
         setDueDate(context.service, unassignedTomorrow.id(), START_DATE.plusDays(1));
 
         FlashcardSession session = FlashcardSession.forCard(
-                context.service, unassignedTomorrow.id(), FIXED_CLOCK);
+                context.service, unassignedTomorrow.id());
 
         assertEquals(FlashcardSession.State.PROMPT, session.state());
         assertEquals("そ", session.currentPrompt().orElseThrow().hiragana());
@@ -230,7 +226,7 @@ class FlashcardSessionTest {
         Deck deck = context.service.createDeck("Words");
         addToDeck(context.service, deck, first, second);
         FlashcardSession session = FlashcardSession.forAllCardsInDeck(
-                context.service, deck.id(), FIXED_CLOCK);
+                context.service, deck.id());
 
         context.service.addCardToDeck(deck.id(), addedLater.id());
         context.service.removeCardFromDeck(deck.id(), second.id());
@@ -325,7 +321,7 @@ class FlashcardSessionTest {
         assertThrows(IllegalStateException.class, () -> session.reveal(first.id()));
 
         FlashcardSession revealedSession = FlashcardSession.forCard(
-                context.service, second.id(), FIXED_CLOCK);
+                context.service, second.id());
         revealedSession.reveal(second.id());
         revealedSession.stop();
         assertEquals(FlashcardSession.State.STOPPED, revealedSession.state());
@@ -368,7 +364,7 @@ class FlashcardSessionTest {
         Deck deck = context.service.createDeck("Words");
         context.service.addCardToDeck(deck.id(), card.id());
         FlashcardSession session = reviewAll ? createDeckSession(context, deck, true)
-                : FlashcardSession.forCard(context.service, card.id(), FIXED_CLOCK);
+                : FlashcardSession.forCard(context.service, card.id());
         session.reveal(card.id());
         List<ModeProgress> originalProgress = progressSnapshots(context.service);
         int savesBeforeFailure = context.storage.saveInvocations;
@@ -457,7 +453,7 @@ class FlashcardSessionTest {
         Deck deck = context.service.createDeck("Early");
         addToDeck(context.service, deck, correct, incorrect);
         FlashcardSession session = FlashcardSession.forAllCardsInDeck(
-                context.service, deck.id(), clock);
+                context.service, deck.id());
 
         currentInstant.set(Instant.parse("2026-08-31T16:00:00Z"));
         session.reveal(correct.id());
@@ -515,14 +511,14 @@ class FlashcardSessionTest {
         context.service.addCardToDeck(second.id(), shared.id());
 
         FlashcardSession firstSession = FlashcardSession.forAllCardsInDeck(
-                context.service, first.id(), FIXED_CLOCK);
+                context.service, first.id());
         firstSession.reveal(shared.id());
         firstSession.submit(shared.id(), ReviewOutcome.CORRECT);
 
         FlashcardSession dueSession = FlashcardSession.forDeck(
                 context.service, second.id(), FIXED_CLOCK);
         FlashcardSession secondSession = FlashcardSession.forAllCardsInDeck(
-                context.service, second.id(), FIXED_CLOCK);
+                context.service, second.id());
 
         assertEquals(FlashcardSession.State.COMPLETED, dueSession.state());
         assertEquals(new FlashcardSession.Summary(0, 0, 0, 0, 0, false), dueSession.summary());
@@ -560,7 +556,7 @@ class FlashcardSessionTest {
         TestContext context = new TestContext();
         VocabularyCard card = context.addCard("ね", "ne", "root");
         FlashcardSession session = FlashcardSession.forCard(
-                context.service, card.id(), FIXED_CLOCK);
+                context.service, card.id());
         session.reveal(card.id());
         context.service.deleteVocabularyCard(card.id());
         FlashcardSession.Summary summaryBeforeSubmission = session.summary();
@@ -646,7 +642,7 @@ class FlashcardSessionTest {
             for (UUID cardId : currentDeck.cardIds()) {
                 setDueDate(context.service, cardId, START_DATE.plusDays(10));
             }
-            return FlashcardSession.forAllCardsInDeck(context.service, deck.id(), FIXED_CLOCK);
+            return FlashcardSession.forAllCardsInDeck(context.service, deck.id());
         }
         return FlashcardSession.forDeck(context.service, deck.id(), FIXED_CLOCK);
     }

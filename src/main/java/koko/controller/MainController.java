@@ -249,10 +249,10 @@ public final class MainController {
         }
         Mode mode = selectedMode;
         if (mode == Mode.FLASHCARD) {
-            startReview(() -> FlashcardSession.forCard(service, selected.id(), clock),
+            startReview(() -> FlashcardSession.forCard(service, selected.id()),
                     "Reviewing the selected global card in Flashcard mode.");
         } else {
-            startTypingReview(() -> TypingSession.forCard(service, selected.id(), clock),
+            startTypingReview(() -> TypingSession.forCard(service, selected.id()),
                     "Reviewing the selected global card in Typing mode.");
         }
     }
@@ -289,10 +289,10 @@ public final class MainController {
         }
         Mode mode = selectedMode;
         if (mode == Mode.FLASHCARD) {
-            startReview(() -> FlashcardSession.forAllCardsInDeck(service, selected.id(), clock),
+            startReview(() -> FlashcardSession.forAllCardsInDeck(service, selected.id()),
                     "Reviewing all cards from “" + selected.name() + "” in Flashcard mode.");
         } else {
-            startTypingReview(() -> TypingSession.forAllCardsInDeck(service, selected.id(), clock),
+            startTypingReview(() -> TypingSession.forAllCardsInDeck(service, selected.id()),
                     "Reviewing all cards from “" + selected.name() + "” in Typing mode.");
         }
     }

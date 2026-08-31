@@ -48,21 +48,17 @@ class TypingSessionTest {
         KokoData originalData = context.service.data();
 
         assertThrows(IllegalArgumentException.class, () ->
-                TypingSession.forCard(context.service, missingId, FIXED_CLOCK));
+                TypingSession.forCard(context.service, missingId));
         assertThrows(IllegalArgumentException.class, () ->
-                TypingSession.forAllCardsInDeck(context.service, missingId, FIXED_CLOCK));
+                TypingSession.forAllCardsInDeck(context.service, missingId));
         assertThrows(NullPointerException.class, () ->
-                TypingSession.forCard(null, missingId, FIXED_CLOCK));
+                TypingSession.forCard(null, missingId));
         assertThrows(NullPointerException.class, () ->
-                TypingSession.forAllCardsInDeck(null, missingId, FIXED_CLOCK));
+                TypingSession.forAllCardsInDeck(null, missingId));
         assertThrows(NullPointerException.class, () ->
-                TypingSession.forCard(context.service, null, FIXED_CLOCK));
+                TypingSession.forCard(context.service, null));
         assertThrows(NullPointerException.class, () ->
-                TypingSession.forAllCardsInDeck(context.service, null, FIXED_CLOCK));
-        assertThrows(NullPointerException.class, () ->
-                TypingSession.forCard(context.service, missingId, null));
-        assertThrows(NullPointerException.class, () ->
-                TypingSession.forAllCardsInDeck(context.service, missingId, null));
+                TypingSession.forAllCardsInDeck(context.service, null));
 
         assertSame(originalData, context.service.data());
         assertEquals(0, context.storage.saveInvocations);
@@ -131,7 +127,7 @@ class TypingSessionTest {
         int savesBeforeSession = context.storage.saveInvocations;
 
         TypingSession session = TypingSession.forAllCardsInDeck(
-                context.service, deck.id(), FIXED_CLOCK);
+                context.service, deck.id());
         List<UUID> order = new ArrayList<>();
         while (session.state() == TypingSession.State.PROMPT) {
             UUID cardId = session.currentCardId().orElseThrow();
@@ -147,7 +143,7 @@ class TypingSessionTest {
         assertEquals(3, context.storage.successfulSaveCount - savesBeforeSession);
 
         TypingSession repeated = TypingSession.forAllCardsInDeck(
-                context.service, deck.id(), FIXED_CLOCK);
+                context.service, deck.id());
         assertEquals(TypingSession.State.PROMPT, repeated.state());
         assertEquals(third.id(), repeated.currentCardId().orElseThrow());
     }
@@ -162,7 +158,7 @@ class TypingSessionTest {
         int savesBeforeReview = context.storage.saveInvocations;
 
         TypingSession futureSession = TypingSession.forAllCardsInDeck(
-                context.service, futureDeck.id(), FIXED_CLOCK);
+                context.service, futureDeck.id());
         assertEquals(TypingSession.State.PROMPT, futureSession.state());
         assertEquals(savesBeforeReview, context.storage.saveInvocations);
         futureSession.submit(future.id(), future.hiragana());
@@ -172,7 +168,7 @@ class TypingSessionTest {
         Deck emptyDeck = context.service.createDeck("Empty");
         int savesBeforeEmptySession = context.storage.saveInvocations;
         TypingSession emptySession = TypingSession.forAllCardsInDeck(
-                context.service, emptyDeck.id(), FIXED_CLOCK);
+                context.service, emptyDeck.id());
 
         assertEquals(TypingSession.State.COMPLETED, emptySession.state());
         assertEquals(new TypingSession.Summary(0, 0, 0, 0, 0, 0, false), emptySession.summary());
@@ -186,7 +182,7 @@ class TypingSessionTest {
         setDueDate(context.service, card.id(), Mode.TYPING, START_DATE.plusDays(10));
         int savesBeforeSession = context.storage.saveInvocations;
 
-        TypingSession session = TypingSession.forCard(context.service, card.id(), FIXED_CLOCK);
+        TypingSession session = TypingSession.forCard(context.service, card.id());
         assertEquals(new TypingSession.Prompt(card.id(), "sound"),
                 session.currentPrompt().orElseThrow());
         session.submit(card.id(), "  か\u3099  ");
@@ -196,7 +192,7 @@ class TypingSessionTest {
         session.next(card.id());
         assertEquals(TypingSession.State.COMPLETED, session.state());
 
-        TypingSession repeated = TypingSession.forCard(context.service, card.id(), FIXED_CLOCK);
+        TypingSession repeated = TypingSession.forCard(context.service, card.id());
         assertEquals(TypingSession.State.PROMPT, repeated.state());
         assertEquals(card.id(), repeated.currentCardId().orElseThrow());
     }
@@ -229,7 +225,7 @@ class TypingSessionTest {
         Deck deck = context.service.createDeck("Words");
         addToDeck(context.service, deck, first, second);
         TypingSession session = TypingSession.forAllCardsInDeck(
-                context.service, deck.id(), FIXED_CLOCK);
+                context.service, deck.id());
 
         setDueDate(context.service, first.id(), Mode.TYPING, START_DATE.plusDays(10));
         setDueDate(context.service, second.id(), Mode.TYPING, START_DATE.plusDays(10));
@@ -485,7 +481,7 @@ class TypingSessionTest {
         context.service.addCardToDeck(second.id(), card.id());
 
         TypingSession firstSession = TypingSession.forAllCardsInDeck(
-                context.service, first.id(), clock);
+                context.service, first.id());
         current.set(Instant.parse("2026-08-31T16:00:00Z"));
         firstSession.submit(card.id(), card.hiragana());
         firstSession.next(card.id());
@@ -497,7 +493,7 @@ class TypingSessionTest {
         assertEquals(TypingSession.State.COMPLETED,
                 TypingSession.forDeck(context.service, second.id(), clock).state());
         assertEquals(TypingSession.State.PROMPT,
-                TypingSession.forAllCardsInDeck(context.service, second.id(), clock).state());
+                TypingSession.forAllCardsInDeck(context.service, second.id()).state());
     }
 
     @ParameterizedTest
@@ -510,8 +506,8 @@ class TypingSessionTest {
         Deck deck = context.service.createDeck("Words");
         context.service.addCardToDeck(deck.id(), card.id());
         TypingSession session = reviewAll
-                ? TypingSession.forAllCardsInDeck(context.service, deck.id(), FIXED_CLOCK)
-                : TypingSession.forCard(context.service, card.id(), FIXED_CLOCK);
+                ? TypingSession.forAllCardsInDeck(context.service, deck.id())
+                : TypingSession.forCard(context.service, card.id());
         KokoData originalData = context.service.data();
         VocabularyCard originalCard = currentCard(context.service, card.id());
         ModeProgress originalProgress = originalCard.progressFor(Mode.TYPING);
