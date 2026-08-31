@@ -1,5 +1,6 @@
 package koko.model;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -32,12 +33,12 @@ class ModeProgressTest {
 
     @Test
     void masteryBoundariesAreAcceptedAndInvalidValuesAreRejected() {
-        ModeProgress progress = ModeProgress.forCreationDate(CREATION_DATE);
-
-        assertEquals(0, progress.withMastery(0).mastery());
-        assertEquals(5, progress.withMastery(5).mastery());
-        assertThrows(IllegalArgumentException.class, () -> progress.withMastery(-1));
-        assertThrows(IllegalArgumentException.class, () -> progress.withMastery(6));
+        assertDoesNotThrow(() -> new ModeProgress(0, 0, 0, null, CREATION_DATE));
+        assertDoesNotThrow(() -> new ModeProgress(5, 0, 0, null, CREATION_DATE));
+        assertThrows(IllegalArgumentException.class, () ->
+                new ModeProgress(-1, 0, 0, null, CREATION_DATE));
+        assertThrows(IllegalArgumentException.class, () ->
+                new ModeProgress(6, 0, 0, null, CREATION_DATE));
         assertThrows(IllegalArgumentException.class, () ->
                 new ModeProgress(0, 1, 2, null, CREATION_DATE));
     }

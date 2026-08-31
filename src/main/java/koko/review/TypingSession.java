@@ -275,19 +275,6 @@ public final class TypingSession {
     }
 
     /**
-     * Stops the active session without an external card ID.
-     *
-     * <p>This overload supports non-view callers. View actions should use the ID-bound
-     * overload so stale events cannot stop a different card.
-     */
-    public void stop() {
-        if (state == State.PROMPT || state == State.FEEDBACK) {
-            requireCurrentCard();
-            state = State.STOPPED;
-        }
-    }
-
-    /**
      * Returns the number of successfully persisted correct outcomes.
      *
      * @return correct outcome count.

@@ -55,18 +55,6 @@ public final class ModeProgress {
     }
 
     /**
-     * Returns a copy with a different validated mastery value.
-     *
-     * @param newMastery replacement mastery from zero to five, inclusive.
-     * @return progress with the replacement mastery.
-     * @throws IllegalArgumentException if newMastery is outside the valid range.
-     */
-    public ModeProgress withMastery(int newMastery) {
-        return new ModeProgress(newMastery, attempts, correctAttempts,
-                lastReviewedDate, nextDueDate);
-    }
-
-    /**
      * Returns whether this progress is due on the supplied date.
      *
      * @param date date against which due status is checked.

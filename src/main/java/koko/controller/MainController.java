@@ -124,24 +124,6 @@ public final class MainController {
     private Button reviewDueButton;
 
     /**
-     * Creates a controller for the already-created application service.
-     *
-     * @param service service used by this scene.
-     * @param startupError controlled load error, or null when startup loaded normally.
-     */
-    public MainController(KokoService service, String startupError) {
-        this(service, startupError, Clock.systemDefaultZone(), type -> {
-            if (type == ReviewController.class) {
-                return new ReviewController();
-            }
-            if (type == TypingReviewController.class) {
-                return new TypingReviewController();
-            }
-            throw new IllegalStateException("Unexpected FXML controller: " + type.getName());
-        });
-    }
-
-    /**
      * Creates a controller with the shared application clock and FXML factory.
      *
      * @param service service used by this scene.
