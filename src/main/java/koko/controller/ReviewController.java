@@ -122,10 +122,8 @@ public final class ReviewController {
             session.submit(expectedCardId, outcome);
             clearFeedback();
         } catch (StorageException exception) {
-            feedbackLabel.setText("Could not save this outcome. No progress was recorded. "
+            showFeedback("Could not save this outcome. No progress was recorded. "
                     + "Retry Correct or Incorrect, or choose Stop. " + exception.getMessage());
-            feedbackLabel.setVisible(true);
-            feedbackLabel.setManaged(true);
         } catch (IllegalStateException | IllegalArgumentException exception) {
             showStaleAction(exception);
         } finally {
@@ -262,10 +260,14 @@ public final class ReviewController {
         feedbackLabel.setManaged(false);
     }
 
-    private void showStaleAction(RuntimeException exception) {
-        feedbackLabel.setText("That action is no longer current. The session state was left unchanged."
-                + " " + exception.getMessage());
+    private void showFeedback(String message) {
+        feedbackLabel.setText(message);
         feedbackLabel.setVisible(true);
         feedbackLabel.setManaged(true);
+    }
+
+    private void showStaleAction(RuntimeException exception) {
+        showFeedback("That action is no longer current. The session state was left unchanged. "
+                + exception.getMessage());
     }
 }
