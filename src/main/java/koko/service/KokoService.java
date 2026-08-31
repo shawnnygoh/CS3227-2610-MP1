@@ -509,6 +509,12 @@ public final class KokoService {
     /**
      * Creates a detached deep copy of the complete aggregate, including both progress records.
      *
+     * <p>Detachment covers the aggregate structure: cards, decks, and their
+     * collections are rebuilt. Progress records are shared rather than rebuilt
+     * because {@link ModeProgress} is immutable and {@code updateProgress}
+     * replaces a mode's entry instead of mutating it, so a change to the
+     * candidate can never reach the source.
+     *
      * @param source aggregate to copy.
      * @return detached aggregate with the same UUIDs, values, order, memberships, and progress.
      */
@@ -516,23 +522,12 @@ public final class KokoService {
         List<VocabularyCard> cards = new ArrayList<>();
         for (VocabularyCard card : source.vocabularyCards()) {
             cards.add(VocabularyCard.restore(card.id(), card.hiragana(), card.romaji(),
-                    card.englishMeaning(), copyProgress(card.progressFor(Mode.FLASHCARD)),
-                    copyProgress(card.progressFor(Mode.TYPING))));
+                    card.englishMeaning(), card.progressFor(Mode.FLASHCARD),
+                    card.progressFor(Mode.TYPING)));
         }
         List<Deck> decks = source.decks().stream()
                 .map(deck -> Deck.restore(deck.id(), deck.name(), deck.cardIds()))
                 .toList();
         return KokoData.restore(cards, decks);
-    }
-
-    /**
-     * Copies one immutable progress record for use in a detached aggregate.
-     *
-     * @param progress progress record to copy.
-     * @return equivalent independent progress record.
-     */
-    private static ModeProgress copyProgress(ModeProgress progress) {
-        return new ModeProgress(progress.mastery(), progress.attempts(),
-                progress.correctAttempts(), progress.lastReviewedDate(), progress.nextDueDate());
     }
 }
