@@ -13,6 +13,8 @@
             <VBox spacing="8" minWidth="0">
                 <Label text="Vocabulary and decks" styleClass="subsection-title" />
                 <Label wrapText="true" minHeight="-Infinity"
+                       text="Card fields must be single-line text. Surrounding whitespace is trimmed, but embedded tabs, line breaks, and control characters are rejected. If an older saved file contains invalid text, Koko leaves it untouched: correct or restore the file, then restart." />
+                <Label wrapText="true" minHeight="-Infinity"
                        text="Add and edit words in Global vocabulary. Select a deck to see its cards, then use Add existing card to add a word from your library." />
                 <Label wrapText="true" minHeight="-Infinity"
                        text="A word can belong to several decks or none. You can rename decks. Removing a card from a deck, or deleting a deck, keeps the global cards. Deleting a global card removes it from every deck and asks for confirmation." />

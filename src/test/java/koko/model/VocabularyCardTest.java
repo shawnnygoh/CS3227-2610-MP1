@@ -11,6 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.LocalDate;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Tests card text boundaries, identity, and independent mode progress.
@@ -18,6 +20,33 @@ import org.junit.jupiter.api.Test;
 class VocabularyCardTest {
 
     private static final LocalDate CREATION_DATE = LocalDate.of(2026, 8, 29);
+
+    @ParameterizedTest
+    @ValueSource(strings = {"\n", "\r", "\t", "\u000B", "\u2028", "\u2029"})
+    void embeddedControlsAreRejectedWithoutChangingExistingText(String separator) {
+        VocabularyCard card = new VocabularyCard("ねこ", "neko", "cat", CREATION_DATE);
+        assertInvalidCard(IllegalArgumentException.class, "ね" + separator + "こ", "neko", "cat");
+        assertInvalidCard(IllegalArgumentException.class, "ねこ", "ne" + separator + "ko", "cat");
+        assertInvalidCard(IllegalArgumentException.class, "ねこ", "neko", "ca" + separator + "t");
+
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class, () ->
+                card.editContent("いぬ", "inu", "do" + separator + "g"));
+
+        assertTrue(failure.getMessage().contains("single line"));
+        assertEquals("ねこ", card.hiragana());
+        assertEquals("neko", card.romaji());
+        assertEquals("cat", card.englishMeaning());
+    }
+
+    @Test
+    void inlineSpacesAndSurroundingWhitespaceRemainValid() {
+        VocabularyCard card = new VocabularyCard("\tか\u3099 こ\u3000ね\n",
+                "\rga ko ne\t", "\ncat animal\r", CREATION_DATE);
+
+        assertEquals("が こ\u3000ね", card.hiragana());
+        assertEquals("ga ko ne", card.romaji());
+        assertEquals("cat animal", card.englishMeaning());
+    }
 
     @Test
     void cardRejectsNullEmptyAndWhitespaceOnlyText() {

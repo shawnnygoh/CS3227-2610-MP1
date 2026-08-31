@@ -50,7 +50,7 @@ class DeckTransferTest {
         Files.createDirectory(directory);
         Path path = directory.resolve("animals export.json");
         PortableDeck original = new PortableDeck(1, "動物 \uD83D\uDC08 \"\\", List.of(
-                new PortableCard("ね\tこ", "neko\n", "cat\t"),
+                new PortableCard("\tねこ", "neko\n", "cat\t"),
                 new PortableCard("いぬ", "inu", "dog")));
 
         DeckTransfer transfer = new DeckTransfer();

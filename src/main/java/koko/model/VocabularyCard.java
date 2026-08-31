@@ -16,7 +16,8 @@ import java.util.function.IntPredicate;
  * <p>Hiragana content accepts Hiragana characters, spaces, and the Japanese
  * prolonged sound mark. Romaji and English meaning accept Latin characters,
  * digits, spaces, and common punctuation. Accepted text is normalized to
- * Unicode NFC before validation and storage.
+ * Unicode NFC before validation and storage. Surrounding whitespace is stripped;
+ * embedded control characters and line/paragraph separators are rejected.
  */
 public final class VocabularyCard {
 
@@ -149,19 +150,23 @@ public final class VocabularyCard {
             IntPredicate characterRule) {
         if (value.isEmpty()) {
             errors.add(fieldName + " cannot be blank");
+        } else if (value.codePoints().anyMatch(codePoint -> Character.isISOControl(codePoint)
+                || Character.getType(codePoint) == Character.LINE_SEPARATOR
+                || Character.getType(codePoint) == Character.PARAGRAPH_SEPARATOR)) {
+            errors.add(fieldName + " must be a single line without control characters");
         } else if (value.codePoints().anyMatch(characterRule.negate())) {
             errors.add(fieldName + " contains invalid characters");
         }
     }
 
     private static boolean isHiragana(int codePoint) {
-        return Character.isWhitespace(codePoint)
+        return isInlineSpace(codePoint)
                 || Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HIRAGANA
                 || codePoint == 0x30FC;
     }
 
     private static boolean isLatinText(int codePoint) {
-        return Character.isWhitespace(codePoint)
+        return isInlineSpace(codePoint)
                 || Character.isDigit(codePoint)
                 || (Character.isLetter(codePoint)
                         && Character.UnicodeScript.of(codePoint)
@@ -175,6 +180,12 @@ public final class VocabularyCard {
                     '=' -> true;
             default -> false;
         };
+    }
+
+    /** Accepts the existing Unicode spaces without admitting control characters or line breaks. */
+    private static boolean isInlineSpace(int codePoint) {
+        return Character.isWhitespace(codePoint)
+                && Character.getType(codePoint) == Character.SPACE_SEPARATOR;
     }
 
     /**

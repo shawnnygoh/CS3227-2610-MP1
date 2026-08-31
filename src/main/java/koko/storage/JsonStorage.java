@@ -114,7 +114,7 @@ public final class JsonStorage implements Storage {
             }
             return restore(document);
         } catch (IOException | IllegalArgumentException | SecurityException exception) {
-            throw new StorageException("Could not load valid Koko data", exception);
+            throw new StorageException("Could not load valid Koko data: " + exception.getMessage(), exception);
         }
     }
 

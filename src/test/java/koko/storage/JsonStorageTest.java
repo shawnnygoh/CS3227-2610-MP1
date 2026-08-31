@@ -28,6 +28,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,6 +54,18 @@ class JsonStorageTest {
 
     @TempDir
     Path temporaryDirectory;
+
+    @ParameterizedTest
+    @ValueSource(strings = {"\\n", "\\r", "\\t", "\\u2028", "\\u2029"})
+    void legacyEmbeddedControlsFailLoadingWithoutRewritingTheLibrary(String escaped) throws Exception {
+        Path path = writeDocument(validInternalDocument().replace("ねこ", "ね" + escaped + "こ"));
+        byte[] originalBytes = Files.readAllBytes(path);
+
+        StorageException failure = assertThrows(StorageException.class, () -> new JsonStorage(path).load());
+
+        assertTrue(failure.getMessage().contains("single line"));
+        assertArrayEquals(originalBytes, Files.readAllBytes(path));
+    }
 
     @Test
     void missingFileLoadsEmptyState() throws StorageException {

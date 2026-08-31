@@ -29,6 +29,8 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,6 +60,27 @@ class KokoServiceTransferTest {
 
     @TempDir
     Path temporaryDirectory;
+
+    @ParameterizedTest
+    @ValueSource(strings = {"\n", "\r", "\t", "\u2028", "\u2029"})
+    void embeddedControlsRejectPreparedAndDirectImportsWithoutSaving(String separator) throws Exception {
+        JsonStorage storage = new JsonStorage(temporaryDirectory.resolve("library.json"));
+        KokoService service = new KokoService(storage, FIRST_CLOCK);
+        service.addVocabularyCard("いぬ", "inu", "dog");
+        KokoData original = service.data();
+        byte[] originalBytes = Files.readAllBytes(storage.configuredPath().orElseThrow());
+        PortableDeck document = new PortableDeck(1, "Invalid", List.of(
+                new PortableCard("ね" + separator + "こ", "neko", "cat")));
+        Path source = writeSource(new ObjectMapper().writeValueAsString(document));
+
+        assertThrows(DeckTransferException.class, () -> service.prepareImport(source));
+        assertThrows(DeckTransferException.class, () -> service.importDeck(document, "Invalid"));
+
+        assertSame(original, service.data());
+        assertEquals(1, service.data().vocabularyCards().size());
+        assertTrue(service.data().decks().isEmpty());
+        assertArrayEquals(originalBytes, Files.readAllBytes(storage.configuredPath().orElseThrow()));
+    }
 
     @Test
     void mixedImportReusesGlobalCardsAndPreservesOrderingProgressAndText() throws Exception {
