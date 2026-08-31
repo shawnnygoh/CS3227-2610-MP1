@@ -2,18 +2,11 @@ package koko.review;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
-import koko.model.Deck;
 import koko.model.Mode;
-import koko.model.ModeProgress;
 import koko.model.VocabularyCard;
 import koko.service.KokoService;
 import koko.service.ReviewOutcome;
@@ -57,27 +50,18 @@ public final class TypingSession {
             int attempted, int remaining, boolean stopped) {
     }
 
-    private record QueuedCard(UUID cardId, LocalDate dueDate) {
-    }
-
+    private final ReviewQueue queue;
     private final KokoService service;
-    private final List<UUID> queuedCardIds;
-    private int currentPosition;
     private int correct;
     private int incorrect;
     private int skipped;
     private Feedback feedback;
     private State state;
 
-    private TypingSession(KokoService service, UUID deckId, Clock clock) {
-        this(Objects.requireNonNull(service, "Service cannot be null"),
-                dueCardIds(service, deckId, clock));
-    }
-
-    private TypingSession(KokoService service, List<UUID> queuedCardIds) {
-        this.service = service;
-        this.queuedCardIds = List.copyOf(queuedCardIds);
-        state = this.queuedCardIds.isEmpty() ? State.COMPLETED : State.PROMPT;
+    private TypingSession(ReviewQueue queue) {
+        this.queue = queue;
+        service = queue.service();
+        state = queue.isEmpty() ? State.COMPLETED : State.PROMPT;
     }
 
     /**
@@ -94,7 +78,8 @@ public final class TypingSession {
      * @throws NullPointerException if an argument is null.
      */
     public static TypingSession forDeck(KokoService service, UUID deckId, Clock clock) {
-        return new TypingSession(service, deckId, clock);
+        return new TypingSession(
+                ReviewQueue.forDueCardsInDeck(service, deckId, clock, Mode.TYPING));
     }
 
     /**
@@ -108,10 +93,7 @@ public final class TypingSession {
      * @throws NullPointerException if an argument is null.
      */
     public static TypingSession forCard(KokoService service, UUID cardId) {
-        KokoService checkedService = Objects.requireNonNull(service, "Service cannot be null");
-        UUID checkedCardId = Objects.requireNonNull(cardId, "Card ID cannot be null");
-        requireCardForStart(checkedService, checkedCardId);
-        return new TypingSession(checkedService, List.of(checkedCardId));
+        return new TypingSession(ReviewQueue.forSingleCard(service, cardId));
     }
 
     /**
@@ -127,9 +109,7 @@ public final class TypingSession {
      * @throws NullPointerException if an argument is null.
      */
     public static TypingSession forAllCardsInDeck(KokoService service, UUID deckId) {
-        KokoService checkedService = Objects.requireNonNull(service, "Service cannot be null");
-        UUID checkedDeckId = Objects.requireNonNull(deckId, "Deck ID cannot be null");
-        return new TypingSession(checkedService, allCardIds(checkedService, checkedDeckId));
+        return new TypingSession(ReviewQueue.forAllCardsInDeck(service, deckId));
     }
 
     /**
@@ -147,8 +127,7 @@ public final class TypingSession {
      * @return current card ID, or empty after completion or an empty session.
      */
     public Optional<UUID> currentCardId() {
-        return currentPosition < queuedCardIds.size()
-                ? Optional.of(queuedCardIds.get(currentPosition)) : Optional.empty();
+        return queue.currentCardId();
     }
 
     /**
@@ -161,7 +140,7 @@ public final class TypingSession {
         if (state != State.PROMPT) {
             return Optional.empty();
         }
-        VocabularyCard card = requireCurrentCard();
+        VocabularyCard card = queue.requireCurrentCard();
         return Optional.of(new Prompt(card.id(), card.englishMeaning()));
     }
 
@@ -175,7 +154,7 @@ public final class TypingSession {
         if (feedback == null || (state != State.FEEDBACK && state != State.STOPPED)) {
             return Optional.empty();
         }
-        requireCurrentCard();
+        queue.requireCurrentCard();
         return Optional.of(feedback);
     }
 
@@ -194,10 +173,10 @@ public final class TypingSession {
      * @throws StorageException if persistence fails.
      */
     public void submit(UUID expectedCardId, String enteredAnswer) throws StorageException {
-        requireExpectedCurrentCard(expectedCardId);
+        queue.requireExpectedCurrentCard(expectedCardId);
         requireState(State.PROMPT, "Only a prompt can be submitted");
         Objects.requireNonNull(enteredAnswer, "Entered answer cannot be null");
-        VocabularyCard card = requireCurrentCard();
+        VocabularyCard card = queue.requireCurrentCard();
         ReviewOutcome outcome = TypingAnswerEvaluator.isCorrect(enteredAnswer, card.hiragana())
                 ? ReviewOutcome.CORRECT : ReviewOutcome.INCORRECT;
         service.recordTypingOutcome(expectedCardId, outcome);
@@ -218,9 +197,9 @@ public final class TypingSession {
      * @throws StorageException if persistence fails.
      */
     public void skip(UUID expectedCardId) throws StorageException {
-        requireExpectedCurrentCard(expectedCardId);
+        queue.requireExpectedCurrentCard(expectedCardId);
         requireState(State.PROMPT, "Only a prompt can be skipped");
-        VocabularyCard card = requireCurrentCard();
+        VocabularyCard card = queue.requireCurrentCard();
         service.recordTypingOutcome(expectedCardId, ReviewOutcome.SKIPPED);
         recordFeedback("", card.hiragana(), ReviewOutcome.SKIPPED);
     }
@@ -234,12 +213,12 @@ public final class TypingSession {
      * @throws NullPointerException if expectedCardId is null.
      */
     public void next(UUID expectedCardId) {
-        requireExpectedCurrentCard(expectedCardId);
+        queue.requireExpectedCurrentCard(expectedCardId);
         requireState(State.FEEDBACK, "Next is available only after an outcome");
-        requireCurrentCard();
-        currentPosition++;
+        queue.requireCurrentCard();
+        queue.advance();
         feedback = null;
-        state = currentPosition == queuedCardIds.size() ? State.COMPLETED : State.PROMPT;
+        state = queue.isExhausted() ? State.COMPLETED : State.PROMPT;
     }
 
     /**
@@ -253,9 +232,9 @@ public final class TypingSession {
      * @throws NullPointerException if expectedCardId is null.
      */
     public void stop(UUID expectedCardId) {
-        requireExpectedCurrentCard(expectedCardId);
+        queue.requireExpectedCurrentCard(expectedCardId);
         if (state == State.PROMPT || state == State.FEEDBACK) {
-            requireCurrentCard();
+            queue.requireCurrentCard();
             state = State.STOPPED;
         }
     }
@@ -302,7 +281,7 @@ public final class TypingSession {
      * @return remaining count, excluding a card whose feedback is displayed.
      */
     public int remaining() {
-        return queuedCardIds.size() - attempted();
+        return queue.size() - attempted();
     }
 
     /**
@@ -320,14 +299,14 @@ public final class TypingSession {
      * @return current session summary.
      */
     public Summary summary() {
-        return new Summary(queuedCardIds.size(), correct, incorrect, skipped, attempted(),
+        return new Summary(queue.size(), correct, incorrect, skipped, attempted(),
                 remaining(), stopped());
     }
 
     private void recordFeedback(String enteredAnswer, String expectedHiragana,
             ReviewOutcome outcome) {
-        feedback = new Feedback(currentCardId().orElseThrow(), enteredAnswer, expectedHiragana,
-                outcome);
+        feedback = new Feedback(queue.currentCardId().orElseThrow(), enteredAnswer,
+                expectedHiragana, outcome);
         switch (outcome) {
             case CORRECT -> correct++;
             case INCORRECT -> incorrect++;
@@ -337,66 +316,9 @@ public final class TypingSession {
         state = State.FEEDBACK;
     }
 
-    private void requireExpectedCurrentCard(UUID expectedCardId) {
-        Objects.requireNonNull(expectedCardId, "Expected card ID cannot be null");
-        if (currentCardId().isEmpty() || !expectedCardId.equals(currentCardId().orElseThrow())) {
-            throw new IllegalStateException("Card action is stale");
-        }
-    }
-
     private void requireState(State expectedState, String message) {
         if (state != expectedState) {
             throw new IllegalStateException(message);
         }
-    }
-
-    private VocabularyCard requireCurrentCard() {
-        UUID cardId = currentCardId().orElseThrow(() ->
-                new IllegalStateException("The session has no current card"));
-        return service.data().findVocabularyCard(cardId).orElseThrow(() ->
-                new IllegalStateException("Vocabulary card " + cardId + " no longer exists"));
-    }
-
-    private static VocabularyCard requireCardForStart(KokoService service, UUID cardId) {
-        return service.data().findVocabularyCard(cardId).orElseThrow(() ->
-                new IllegalArgumentException("Vocabulary card " + cardId + " does not exist"));
-    }
-
-    private static List<UUID> dueCardIds(KokoService service, UUID deckId, Clock clock) {
-        Objects.requireNonNull(service, "Service cannot be null");
-        UUID checkedDeckId = Objects.requireNonNull(deckId, "Deck ID cannot be null");
-        Clock checkedClock = Objects.requireNonNull(clock, "Clock cannot be null");
-        Deck deck = service.data().findDeckById(checkedDeckId).orElseThrow(() ->
-                new IllegalArgumentException("Deck does not exist"));
-        LocalDate startDate = LocalDate.now(checkedClock);
-        Set<UUID> seenCardIds = new LinkedHashSet<>();
-        List<QueuedCard> dueCards = new ArrayList<>();
-        for (UUID cardId : deck.cardIds()) {
-            if (seenCardIds.add(cardId)) {
-                VocabularyCard card = service.data().findVocabularyCard(cardId).orElseThrow(() ->
-                        new IllegalArgumentException("Vocabulary card " + cardId
-                                + " does not exist"));
-                ModeProgress progress = card.progressFor(Mode.TYPING);
-                if (progress.isDueOn(startDate)) {
-                    dueCards.add(new QueuedCard(card.id(), progress.nextDueDate()));
-                }
-            }
-        }
-        dueCards.sort(Comparator.comparing(QueuedCard::dueDate));
-        return dueCards.stream().map(QueuedCard::cardId).toList();
-    }
-
-    private static List<UUID> allCardIds(KokoService service, UUID deckId) {
-        Deck deck = service.data().findDeckById(deckId).orElseThrow(() ->
-                new IllegalArgumentException("Deck does not exist"));
-        Set<UUID> seenCardIds = new LinkedHashSet<>();
-        List<UUID> cardIds = new ArrayList<>();
-        for (UUID cardId : deck.cardIds()) {
-            if (seenCardIds.add(cardId)) {
-                VocabularyCard card = requireCardForStart(service, cardId);
-                cardIds.add(card.id());
-            }
-        }
-        return cardIds;
     }
 }

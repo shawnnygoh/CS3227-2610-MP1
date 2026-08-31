@@ -2,18 +2,11 @@ package koko.review;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
-import koko.model.Deck;
 import koko.model.Mode;
-import koko.model.ModeProgress;
 import koko.model.VocabularyCard;
 import koko.service.KokoService;
 import koko.service.ReviewOutcome;
@@ -56,25 +49,16 @@ public final class FlashcardSession {
             int remaining, boolean stopped) {
     }
 
-    private record QueuedCard(UUID cardId, LocalDate dueDate) {
-    }
-
+    private final ReviewQueue queue;
     private final KokoService service;
-    private final List<UUID> queuedCardIds;
-    private int currentPosition;
     private int correct;
     private int incorrect;
     private State state;
 
-    private FlashcardSession(KokoService service, UUID deckId, Clock clock) {
-        this(Objects.requireNonNull(service, "Service cannot be null"),
-                dueCardIds(service, deckId, clock));
-    }
-
-    private FlashcardSession(KokoService service, List<UUID> queuedCardIds) {
-        this.service = service;
-        this.queuedCardIds = List.copyOf(queuedCardIds);
-        state = this.queuedCardIds.isEmpty() ? State.COMPLETED : State.PROMPT;
+    private FlashcardSession(ReviewQueue queue) {
+        this.queue = queue;
+        service = queue.service();
+        state = queue.isEmpty() ? State.COMPLETED : State.PROMPT;
     }
 
     /**
@@ -88,10 +72,7 @@ public final class FlashcardSession {
      * @throws NullPointerException if an argument is null.
      */
     public static FlashcardSession forCard(KokoService service, UUID cardId) {
-        KokoService checkedService = Objects.requireNonNull(service, "Service cannot be null");
-        UUID checkedCardId = Objects.requireNonNull(cardId, "Card ID cannot be null");
-        requireCardForStart(checkedService, checkedCardId);
-        return new FlashcardSession(checkedService, List.of(checkedCardId));
+        return new FlashcardSession(ReviewQueue.forSingleCard(service, cardId));
     }
 
     /**
@@ -109,7 +90,8 @@ public final class FlashcardSession {
      * @throws NullPointerException if an argument is null.
      */
     public static FlashcardSession forDeck(KokoService service, UUID deckId, Clock clock) {
-        return new FlashcardSession(service, deckId, clock);
+        return new FlashcardSession(
+                ReviewQueue.forDueCardsInDeck(service, deckId, clock, Mode.FLASHCARD));
     }
 
     /**
@@ -125,10 +107,7 @@ public final class FlashcardSession {
      * @throws NullPointerException if an argument is null.
      */
     public static FlashcardSession forAllCardsInDeck(KokoService service, UUID deckId) {
-        KokoService checkedService = Objects.requireNonNull(service, "Service cannot be null");
-        UUID checkedDeckId = Objects.requireNonNull(deckId, "Deck ID cannot be null");
-        return new FlashcardSession(checkedService,
-                allCardIds(checkedService, checkedDeckId));
+        return new FlashcardSession(ReviewQueue.forAllCardsInDeck(service, deckId));
     }
 
     /**
@@ -146,8 +125,7 @@ public final class FlashcardSession {
      * @return current card ID, or empty after completion or for an empty session.
      */
     public Optional<UUID> currentCardId() {
-        return currentPosition < queuedCardIds.size()
-                ? Optional.of(queuedCardIds.get(currentPosition)) : Optional.empty();
+        return queue.currentCardId();
     }
 
     /**
@@ -157,10 +135,10 @@ public final class FlashcardSession {
      * @throws IllegalStateException if the queued card no longer exists.
      */
     public Optional<Prompt> currentPrompt() {
-        if (currentCardId().isEmpty()) {
+        if (queue.currentCardId().isEmpty()) {
             return Optional.empty();
         }
-        VocabularyCard card = requireCurrentCard();
+        VocabularyCard card = queue.requireCurrentCard();
         return Optional.of(new Prompt(card.id(), card.hiragana()));
     }
 
@@ -174,7 +152,7 @@ public final class FlashcardSession {
         if (state != State.ANSWER_REVEALED) {
             return Optional.empty();
         }
-        VocabularyCard card = requireCurrentCard();
+        VocabularyCard card = queue.requireCurrentCard();
         return Optional.of(new Answer(card.id(), card.romaji(), card.englishMeaning()));
     }
 
@@ -187,9 +165,9 @@ public final class FlashcardSession {
      *         or the queued card no longer exists.
      */
     public void reveal(UUID expectedCardId) {
-        requireExpectedCurrentCard(expectedCardId);
+        queue.requireExpectedCurrentCard(expectedCardId);
         requireState(State.PROMPT, "Only a prompt can be revealed");
-        requireCurrentCard();
+        queue.requireCurrentCard();
         state = State.ANSWER_REVEALED;
     }
 
@@ -210,14 +188,14 @@ public final class FlashcardSession {
      * @throws StorageException if persistence fails.
      */
     public void submit(UUID expectedCardId, ReviewOutcome outcome) throws StorageException {
-        requireExpectedCurrentCard(expectedCardId);
+        queue.requireExpectedCurrentCard(expectedCardId);
         requireState(State.ANSWER_REVEALED, "Only a revealed answer can be submitted");
         Objects.requireNonNull(outcome, "Review outcome cannot be null");
         if (outcome == ReviewOutcome.SKIPPED) {
             throw new IllegalArgumentException("Skipped outcomes are not accepted");
         }
         boolean correctOutcome = outcome == ReviewOutcome.CORRECT;
-        requireCurrentCard();
+        queue.requireCurrentCard();
         service.recordFlashcardOutcome(expectedCardId, outcome);
 
         if (correctOutcome) {
@@ -225,8 +203,8 @@ public final class FlashcardSession {
         } else {
             incorrect++;
         }
-        currentPosition++;
-        state = currentPosition == queuedCardIds.size() ? State.COMPLETED : State.PROMPT;
+        queue.advance();
+        state = queue.isExhausted() ? State.COMPLETED : State.PROMPT;
     }
 
     /**
@@ -273,7 +251,7 @@ public final class FlashcardSession {
      * @return remaining count, including the current card.
      */
     public int remaining() {
-        return queuedCardIds.size() - attempted();
+        return queue.size() - attempted();
     }
 
     /**
@@ -291,72 +269,13 @@ public final class FlashcardSession {
      * @return current session summary.
      */
     public Summary summary() {
-        return new Summary(queuedCardIds.size(), correct, incorrect, attempted(), remaining(),
+        return new Summary(queue.size(), correct, incorrect, attempted(), remaining(),
                 stopped());
-    }
-
-    private void requireExpectedCurrentCard(UUID expectedCardId) {
-        Objects.requireNonNull(expectedCardId, "Expected card ID cannot be null");
-        if (currentCardId().isEmpty() || !expectedCardId.equals(currentCardId().orElseThrow())) {
-            throw new IllegalStateException("Card action is stale");
-        }
     }
 
     private void requireState(State expectedState, String message) {
         if (state != expectedState) {
             throw new IllegalStateException(message);
         }
-    }
-
-    private VocabularyCard requireCurrentCard() {
-        UUID cardId = currentCardId().orElseThrow(() ->
-                new IllegalStateException("The session has no current card"));
-        return requireCard(service, cardId);
-    }
-
-    private static VocabularyCard requireCard(KokoService service, UUID cardId) {
-        return service.data().findVocabularyCard(cardId).orElseThrow(() ->
-                new IllegalStateException("Vocabulary card " + cardId + " no longer exists"));
-    }
-
-    private static VocabularyCard requireCardForStart(KokoService service, UUID cardId) {
-        return service.data().findVocabularyCard(cardId).orElseThrow(() ->
-                new IllegalArgumentException("Vocabulary card " + cardId + " does not exist"));
-    }
-
-    private static List<UUID> dueCardIds(KokoService service, UUID deckId, Clock clock) {
-        Objects.requireNonNull(service, "Service cannot be null");
-        UUID checkedDeckId = Objects.requireNonNull(deckId, "Deck ID cannot be null");
-        Clock checkedClock = Objects.requireNonNull(clock, "Clock cannot be null");
-        Deck deck = service.data().findDeckById(checkedDeckId).orElseThrow(() ->
-                new IllegalArgumentException("Deck does not exist"));
-        LocalDate startDate = LocalDate.now(checkedClock);
-        Set<UUID> seenCardIds = new LinkedHashSet<>();
-        List<QueuedCard> dueCards = new ArrayList<>();
-        for (UUID cardId : deck.cardIds()) {
-            if (seenCardIds.add(cardId)) {
-                VocabularyCard card = requireCardForStart(service, cardId);
-                ModeProgress progress = card.progressFor(Mode.FLASHCARD);
-                if (progress.isDueOn(startDate)) {
-                    dueCards.add(new QueuedCard(card.id(), progress.nextDueDate()));
-                }
-            }
-        }
-        dueCards.sort(Comparator.comparing(QueuedCard::dueDate));
-        return dueCards.stream().map(QueuedCard::cardId).toList();
-    }
-
-    private static List<UUID> allCardIds(KokoService service, UUID deckId) {
-        Deck deck = service.data().findDeckById(deckId).orElseThrow(() ->
-                new IllegalArgumentException("Deck does not exist"));
-        Set<UUID> seenCardIds = new LinkedHashSet<>();
-        List<UUID> cardIds = new ArrayList<>();
-        for (UUID cardId : deck.cardIds()) {
-            if (seenCardIds.add(cardId)) {
-                VocabularyCard card = requireCardForStart(service, cardId);
-                cardIds.add(card.id());
-            }
-        }
-        return cardIds;
     }
 }
