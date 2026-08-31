@@ -3,6 +3,7 @@ package koko.controller;
 import java.util.Objects;
 import java.util.UUID;
 
+import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -235,9 +236,24 @@ public final class TypingReviewController {
         feedbackPanel.setManaged(false);
         summaryLabel.setVisible(false);
         summaryLabel.setManaged(false);
-        if (!answerField.isFocused()) {
-            answerField.requestFocus();
-        }
+        requestAnswerFocus(prompt.cardId());
+    }
+
+    /**
+     * Focuses a prompt after its root is attached and the current action enables controls.
+     *
+     * <p>The deferred request ignores a prompt that has since been answered or stopped.
+     *
+     * @param cardId card whose prompt requested focus.
+     */
+    private void requestAnswerFocus(UUID cardId) {
+        Platform.runLater(() -> {
+            if (canAct() && session.state() == TypingSession.State.PROMPT
+                    && cardId.equals(displayedCardId) && answerField.getScene() != null
+                    && !answerField.isDisabled()) {
+                answerField.requestFocus();
+            }
+        });
     }
 
     private void renderFeedback() {
