@@ -21,8 +21,10 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
@@ -121,8 +123,16 @@ public final class JsonStorage implements Storage {
             if (Files.notExists(path)) {
                 return new KokoData();
             }
-            JsonDocument document = mapper.readValue(
-                    Files.readString(path, StandardCharsets.UTF_8), JsonDocument.class);
+            String json = Files.readString(path, StandardCharsets.UTF_8);
+            JsonDocument document;
+            try (JsonParser parser = mapper.getFactory().createParser(json)) {
+                JsonNode root = mapper.readTree(parser);
+                if (parser.nextToken() != null) {
+                    throw new IllegalArgumentException("Trailing JSON content is not allowed");
+                }
+                validateJsonTypes(root);
+                document = mapper.treeToValue(root, JsonDocument.class);
+            }
             return restore(document);
         } catch (IOException | IllegalArgumentException | SecurityException exception) {
             throw new StorageException("Could not load valid Koko data", exception);
@@ -235,6 +245,84 @@ public final class JsonStorage implements Storage {
         }
         if (document.cards() == null || document.decks() == null) {
             throw new IllegalArgumentException("Cards and decks must be arrays");
+        }
+    }
+
+    private static void validateJsonTypes(JsonNode root) {
+        if (root == null || !root.isObject()) {
+            return;
+        }
+        requireInteger(root, "schemaVersion");
+        validateCardsType(root.get("cards"));
+        validateDecksType(root.get("decks"));
+    }
+
+    private static void validateCardsType(JsonNode cards) {
+        if (cards == null || !cards.isArray()) {
+            return;
+        }
+        for (JsonNode card : cards) {
+            if (card != null && card.isObject()) {
+                requireString(card, "id");
+                requireString(card, "hiragana");
+                requireString(card, "romaji");
+                requireString(card, "englishMeaning");
+                validateProgressType(card.get("progress"));
+            }
+        }
+    }
+
+    private static void validateProgressType(JsonNode progress) {
+        if (progress == null || !progress.isObject()) {
+            return;
+        }
+        validateModeProgressType(progress.get(Mode.FLASHCARD.name()));
+        validateModeProgressType(progress.get(Mode.TYPING.name()));
+    }
+
+    private static void validateModeProgressType(JsonNode progress) {
+        if (progress == null || !progress.isObject()) {
+            return;
+        }
+        requireInteger(progress, "mastery");
+        requireInteger(progress, "attempts");
+        requireInteger(progress, "correctAttempts");
+        requireString(progress, "lastReviewedDate");
+        requireString(progress, "nextDueDate");
+    }
+
+    private static void validateDecksType(JsonNode decks) {
+        if (decks == null || !decks.isArray()) {
+            return;
+        }
+        for (JsonNode deck : decks) {
+            if (deck != null && deck.isObject()) {
+                requireString(deck, "id");
+                requireString(deck, "name");
+                JsonNode cardIds = deck.get("cardIds");
+                if (cardIds != null && cardIds.isArray()) {
+                    for (JsonNode cardId : cardIds) {
+                        if (cardId != null && !cardId.isNull() && !cardId.isTextual()) {
+                            throw new IllegalArgumentException("cardIds must contain strings");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static void requireInteger(JsonNode object, String fieldName) {
+        JsonNode value = object.get(fieldName);
+        if (value != null && !value.isNull()
+                && (!value.isIntegralNumber() || !value.canConvertToInt())) {
+            throw new IllegalArgumentException(fieldName + " must be an integer");
+        }
+    }
+
+    private static void requireString(JsonNode object, String fieldName) {
+        JsonNode value = object.get(fieldName);
+        if (value != null && !value.isNull() && !value.isTextual()) {
+            throw new IllegalArgumentException(fieldName + " must be a string");
         }
     }
 

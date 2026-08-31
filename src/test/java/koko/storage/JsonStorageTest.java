@@ -3,6 +3,7 @@ package koko.storage;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -20,9 +21,13 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -96,6 +101,21 @@ class JsonStorageTest {
         assertEquals(List.of(second.id(), first.id()), loaded.decks().get(0).cardIds());
         assertEquals(List.of(first.id()), loaded.decks().get(1).cardIds());
         assertNotSame(first, loadedFirst);
+    }
+
+    @Test
+    void validSyntheticDocumentWithNullableDateRoundTrips() throws IOException, StorageException {
+        Path path = writeDocument(validInternalDocument());
+
+        KokoData loaded = new JsonStorage(path).load();
+
+        VocabularyCard card = loaded.vocabularyCards().getFirst();
+        assertEquals("neko", card.romaji());
+        assertEquals("cat", card.englishMeaning());
+        assertEquals(1, card.progressFor(Mode.FLASHCARD).mastery());
+        assertEquals(2, card.progressFor(Mode.TYPING).attempts());
+        assertNull(card.progressFor(Mode.FLASHCARD).lastReviewedDate());
+        assertEquals("Core", loaded.decks().getFirst().name());
     }
 
     @Test
@@ -438,6 +458,74 @@ class JsonStorageTest {
         assertThrows(StorageException.class, () -> new JsonStorage(path).load());
     }
 
+    @ParameterizedTest(name = "rejects invalid {0} JSON type")
+    @MethodSource("invalidJsonTypes")
+    void invalidJsonTypesAreRejectedWithoutChangingFileOrServiceState(
+            String field, String invalidJson) throws Exception {
+        Path path = temporaryDirectory.resolve(field + ".json");
+        JsonStorage storage = new JsonStorage(path);
+        KokoData initial = new KokoData();
+        VocabularyCard card = initial.addVocabularyCard("ねこ", "neko", "cat", CREATION_DATE);
+        Deck deck = initial.createDeck("Core");
+        initial.addCardToDeck(deck.id(), card.id());
+        storage.save(initial);
+
+        KokoService service = new KokoService(storage, Clock.systemUTC());
+        service.load();
+        KokoData preservedState = service.data();
+        Files.writeString(path, invalidJson, StandardCharsets.UTF_8);
+        byte[] invalidBytes = Files.readAllBytes(path);
+
+        assertThrows(StorageException.class, service::load);
+
+        assertSame(preservedState, service.data());
+        assertEquals(List.of(card.id()), service.data().vocabularyCards().stream()
+                .map(VocabularyCard::id).toList());
+        assertEquals(List.of(deck.id()), service.data().decks().stream().map(Deck::id).toList());
+        assertArrayEquals(invalidBytes, Files.readAllBytes(path));
+    }
+
+    private static Stream<Arguments> invalidJsonTypes() {
+        String valid = validInternalDocument();
+        return Stream.of(
+                Arguments.of("schemaVersion", replace(valid, "\"schemaVersion\":1",
+                        "\"schemaVersion\":1.9")),
+                Arguments.of("flashcardMastery", replace(valid,
+                        "\"FLASHCARD\":{\"mastery\":1", "\"FLASHCARD\":{\"mastery\":5.9")),
+                Arguments.of("typingMastery", replace(valid,
+                        "\"TYPING\":{\"mastery\":2", "\"TYPING\":{\"mastery\":2.9")),
+                Arguments.of("flashcardAttempts", replace(valid,
+                        "\"FLASHCARD\":{\"mastery\":1,\"attempts\":2",
+                        "\"FLASHCARD\":{\"mastery\":1,\"attempts\":0.9")),
+                Arguments.of("typingAttempts", replace(valid,
+                        "\"TYPING\":{\"mastery\":2,\"attempts\":2",
+                        "\"TYPING\":{\"mastery\":2,\"attempts\":2.9")),
+                Arguments.of("flashcardCorrectAttempts", replace(valid,
+                        "\"FLASHCARD\":{\"mastery\":1,\"attempts\":2,\"correctAttempts\":1",
+                        "\"FLASHCARD\":{\"mastery\":1,\"attempts\":2,\"correctAttempts\":1.9")),
+                Arguments.of("typingCorrectAttempts", replace(valid,
+                        "\"TYPING\":{\"mastery\":2,\"attempts\":2,\"correctAttempts\":1",
+                        "\"TYPING\":{\"mastery\":2,\"attempts\":2,\"correctAttempts\":1.9")),
+                Arguments.of("cardId", replace(valid, "\"id\":\"" + CARD_ID + "\"",
+                        "\"id\":123")),
+                Arguments.of("hiragana", replace(valid, "\"hiragana\":\"ねこ\"",
+                        "\"hiragana\":123")),
+                Arguments.of("romaji", replace(valid, "\"romaji\":\"neko\"",
+                        "\"romaji\":123")),
+                Arguments.of("englishMeaning", replace(valid, "\"englishMeaning\":\"cat\"",
+                        "\"englishMeaning\":true")),
+                Arguments.of("lastReviewedDate", replace(valid, "\"lastReviewedDate\":null",
+                        "\"lastReviewedDate\":123")),
+                Arguments.of("nextDueDate", replace(valid, "\"nextDueDate\":\"2026-08-29\"",
+                        "\"nextDueDate\":false")),
+                Arguments.of("deckId", replace(valid, "\"id\":\"" + DECK_ID + "\"",
+                        "\"id\":true")),
+                Arguments.of("deckName", replace(valid, "\"name\":\"Core\"",
+                        "\"name\":123")),
+                Arguments.of("deckCardId", replace(valid, "\"cardIds\":[\"" + CARD_ID + "\"]",
+                        "\"cardIds\":[123]")));
+    }
+
     private void assertRejected(String json) throws IOException {
         Path path = writeDocument(json);
 
@@ -453,6 +541,30 @@ class JsonStorageTest {
     private static String document(String version, String cards, String decks) {
         return "{\"schemaVersion\":" + version + ",\"cards\":" + cards
                 + ",\"decks\":" + decks + "}";
+    }
+
+    private static String validInternalDocument() {
+        String flashcardProgress = "\"mastery\":1,\"attempts\":2,"
+                + "\"correctAttempts\":1,\"lastReviewedDate\":null,"
+                + "\"nextDueDate\":\"2026-08-29\"";
+        String typingProgress = "\"mastery\":2,\"attempts\":2,"
+                + "\"correctAttempts\":1,\"lastReviewedDate\":\"2026-08-29\","
+                + "\"nextDueDate\":\"2026-08-31\"";
+        String card = "{\"id\":\"" + CARD_ID + "\",\"hiragana\":\"ねこ\","
+                + "\"romaji\":\"neko\",\"englishMeaning\":\"cat\","
+                + "\"progress\":{\"FLASHCARD\":{" + flashcardProgress + "},"
+                + "\"TYPING\":{" + typingProgress + "}}}";
+        String deck = "{\"id\":\"" + DECK_ID + "\",\"name\":\"Core\","
+                + "\"cardIds\":[\"" + CARD_ID + "\"]}";
+        return document("1", "[" + card + "]", "[" + deck + "]");
+    }
+
+    private static String replace(String source, String target, String replacement) {
+        String result = source.replace(target, replacement);
+        if (result.equals(source)) {
+            throw new IllegalStateException("Test fixture target was not found: " + target);
+        }
+        return result;
     }
 
     private static String cardJson(String id, int mastery) {
