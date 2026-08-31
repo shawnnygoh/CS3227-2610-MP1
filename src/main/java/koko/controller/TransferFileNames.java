@@ -3,6 +3,10 @@ package koko.controller;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.Function;
+
+import koko.transfer.DeckTransfer.ConfirmedDestination;
+import koko.transfer.DeckTransferException;
 
 /**
  * Applies the filename policy used by the portable transfer controls.
@@ -61,6 +65,39 @@ public final class TransferFileNames {
                 : chosenName + JSON_SUFFIX;
         Path parent = chosenDestination.getParent();
         return parent == null ? Path.of(normalizedName) : parent.resolve(normalizedName);
+    }
+
+    /**
+     * Resolves a native save selection without transferring consent to another file.
+     *
+     * <p>A different existing final destination is presented in the native chooser
+     * again. A new final filename keeps create-new behavior. The callback keeps
+     * native interaction in the controller and permits headless decision tests.
+     *
+     * @param deckName name used for the initial filename suggestion.
+     * @param chooser native chooser receiving each suggested destination.
+     * @return captured final destination, or null after canceling any chooser.
+     * @throws DeckTransferException if the destination cannot be checked safely.
+     * @throws IllegalArgumentException if a selected path has no filename.
+     * @throws NullPointerException if deckName or chooser is null.
+     */
+    static ConfirmedDestination chooseExportDestination(String deckName,
+            Function<Path, Path> chooser) throws DeckTransferException {
+        Objects.requireNonNull(chooser, "Chooser cannot be null");
+        Path suggestion = Path.of(suggestExportFileName(deckName));
+        while (true) {
+            Path chosen = chooser.apply(suggestion);
+            if (chosen == null) {
+                return null;
+            }
+            Path destination = normalizeDestination(chosen);
+            ConfirmedDestination confirmed = ConfirmedDestination.fromNativeSelection(
+                    chosen, destination);
+            if (confirmed != null) {
+                return confirmed;
+            }
+            suggestion = destination;
+        }
     }
 
     /**

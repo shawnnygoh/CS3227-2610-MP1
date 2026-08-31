@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.api.io.TempDir;
@@ -539,6 +540,135 @@ class KokoServiceTransferTest {
     }
 
     @Test
+    void nativeConfirmedExportReplacesTheSelectedFileWithoutSavingApplicationState()
+            throws Exception {
+        RecordingStorage storage = new RecordingStorage();
+        KokoService service = new KokoService(storage, FIRST_CLOCK);
+        Deck deck = service.createDeck("日本語 Basics");
+        Path destination = temporaryDirectory.resolve("export.json");
+        Files.writeString(destination, "sentinel", StandardCharsets.UTF_8);
+        KokoData beforeExport = service.data();
+        int savesBeforeExport = storage.saveInvocations;
+
+        service.exportDeck(deck.id(),
+                new koko.transfer.DeckTransfer.ConfirmedDestination(destination));
+
+        assertEquals(savesBeforeExport, storage.saveInvocations);
+        assertSame(beforeExport, service.data());
+        JsonNode exported = new ObjectMapper().readTree(
+                Files.readString(destination, StandardCharsets.UTF_8));
+        assertEquals("日本語 Basics", exported.get("deckName").textValue());
+    }
+
+    @Test
+    void configuredStorageFileAndSupportedAliasesAreProtectedAtServiceBoundary() throws Exception {
+        Path libraryDirectory = temporaryDirectory.resolve("library");
+        Files.createDirectory(libraryDirectory);
+        Path storagePath = libraryDirectory.resolve("koko-data.json");
+        JsonStorage jsonStorage = new JsonStorage(storagePath);
+        jsonStorage.save(new KokoData());
+        KokoService service = new KokoService(jsonStorage, FIRST_CLOCK);
+        service.load();
+        Deck deck = service.createDeck("Empty");
+        byte[] originalBytes = Files.readAllBytes(storagePath);
+
+        assertProtectedDestination(service, deck, storagePath);
+        assertProtectedDestination(service, deck, storagePath.toAbsolutePath());
+        assertProtectedDestination(service, deck,
+                Path.of("").toAbsolutePath().relativize(storagePath));
+
+        Path hardLink = libraryDirectory.resolve("hard-link.json");
+        try {
+            Files.createLink(hardLink, storagePath);
+            assertProtectedDestination(service, deck, hardLink);
+        } catch (UnsupportedOperationException | IOException | SecurityException exception) {
+            Assumptions.assumeTrue(false, "Hard links are unsupported: " + exception);
+        }
+
+        Path caseAlias = storagePath.resolveSibling("KOKO-DATA.JSON");
+        if (Files.exists(caseAlias)) {
+            assertTrue(Files.isSameFile(caseAlias, storagePath));
+            assertProtectedDestination(service, deck, caseAlias);
+        }
+        assertArrayEquals(originalBytes, Files.readAllBytes(storagePath));
+    }
+
+    @Test
+    void parentDirectoryLinkToConfiguredStorageIsProtected() throws Exception {
+        Path libraryDirectory = temporaryDirectory.resolve("library");
+        Files.createDirectory(libraryDirectory);
+        Path storagePath = libraryDirectory.resolve("koko-data.json");
+        JsonStorage jsonStorage = new JsonStorage(storagePath);
+        jsonStorage.save(new KokoData());
+        KokoService service = new KokoService(jsonStorage, FIRST_CLOCK);
+        service.load();
+        Deck deck = service.createDeck("Empty");
+        Path parentAlias = temporaryDirectory.resolve("library-alias");
+        try {
+            Files.createSymbolicLink(parentAlias, libraryDirectory);
+            assertProtectedDestination(service, deck, parentAlias.resolve("koko-data.json"));
+        } catch (UnsupportedOperationException | IOException | SecurityException exception) {
+            Assumptions.assumeTrue(false, "Symbolic links are unsupported: " + exception);
+        }
+    }
+
+    @Test
+    void configuredStorageRetainsLinkedDirectoryParentTraversalSemantics() throws Exception {
+        Path visible = Files.createDirectory(temporaryDirectory.resolve("visible"));
+        Path actualParent = Files.createDirectory(temporaryDirectory.resolve("actual"));
+        Path child = Files.createDirectory(actualParent.resolve("child"));
+        Path link = visible.resolve("link");
+        try {
+            Files.createSymbolicLink(link, child);
+        } catch (UnsupportedOperationException | IOException | SecurityException exception) {
+            Assumptions.assumeTrue(false, "Symbolic links are unsupported: " + exception);
+        }
+        Path configured = link.resolve("../library.json");
+        Path actual = actualParent.resolve("library.json");
+        JsonStorage storage = new JsonStorage(configured);
+        KokoService service = new KokoService(storage, FIRST_CLOCK);
+        Deck deck = service.createDeck("Keep this library");
+        KokoData originalState = service.data();
+        byte[] originalBytes = Files.readAllBytes(actual);
+        assertTrue(Files.isSameFile(configured, actual));
+
+        assertProtectedDestination(service, deck, actual);
+        assertProtectedDestination(service, deck, configured);
+
+        assertArrayEquals(originalBytes, Files.readAllBytes(actual));
+        assertSame(originalState, service.data());
+        assertDataEquals(originalState, storage.load());
+
+        Files.delete(actual);
+        assertProtectedDestination(service, deck, actual);
+        assertTrue(Files.notExists(actual));
+        assertSame(originalState, service.data());
+    }
+
+    @Test
+    void storageIdentityInspectionFailureRejectsExportBeforeWriting() throws Exception {
+        Assumptions.assumeTrue(temporaryDirectory.getFileSystem().supportedFileAttributeViews()
+                .contains("posix"), "Requires POSIX permissions");
+        Path locked = Files.createDirectory(temporaryDirectory.resolve("locked-library"));
+        Path storagePath = Files.writeString(locked.resolve("library.json"), "keep");
+        KokoService service = new KokoService(new JsonStorage(storagePath), FIRST_CLOCK);
+        Path destination = temporaryDirectory.resolve("export.json");
+        var permissions = Files.getPosixFilePermissions(locked);
+        try {
+            Files.setPosixFilePermissions(locked, Set.of());
+            Assumptions.assumeFalse(Files.isReadable(locked), "Requires enforced directory permissions");
+
+            assertThrows(DeckTransferException.class, () -> service.exportDeck(UUID.randomUUID(),
+                    new koko.transfer.DeckTransfer.ConfirmedDestination(destination)));
+        } finally {
+            Files.setPosixFilePermissions(locked, permissions);
+        }
+
+        assertTrue(Files.notExists(destination));
+        assertEquals("keep", Files.readString(storagePath));
+    }
+
+    @Test
     void emptyDeckExportsThroughServiceWithoutSaving() throws Exception {
         RecordingStorage storage = new RecordingStorage();
         KokoService service = new KokoService(storage, FIRST_CLOCK);
@@ -625,6 +755,13 @@ class KokoServiceTransferTest {
     private static ModeProgress copyProgress(ModeProgress progress) {
         return new ModeProgress(progress.mastery(), progress.attempts(),
                 progress.correctAttempts(), progress.lastReviewedDate(), progress.nextDueDate());
+    }
+
+    private static void assertProtectedDestination(KokoService service, Deck deck,
+            Path destination) throws IOException {
+        assertThrows(DeckTransferException.class, () -> service.exportDeck(deck.id(), destination));
+        assertThrows(DeckTransferException.class, () -> service.exportDeck(deck.id(),
+                new koko.transfer.DeckTransfer.ConfirmedDestination(destination)));
     }
 
     /** Records save calls and retains detached snapshots for assertions. */

@@ -51,7 +51,10 @@ class JsonStorageTest {
 
     @Test
     void missingFileLoadsEmptyState() throws StorageException {
-        JsonStorage storage = new JsonStorage(temporaryDirectory.resolve("missing.json"));
+        Path path = temporaryDirectory.resolve("missing.json");
+        JsonStorage storage = new JsonStorage(path);
+
+        assertEquals(path.toAbsolutePath(), storage.configuredPath().orElseThrow());
 
         KokoData loaded = storage.load();
 

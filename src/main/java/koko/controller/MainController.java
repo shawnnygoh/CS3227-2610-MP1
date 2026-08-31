@@ -46,6 +46,7 @@ import koko.review.FlashcardSession;
 import koko.review.TypingSession;
 import koko.service.KokoService;
 import koko.storage.StorageException;
+import koko.transfer.DeckTransfer;
 import koko.transfer.DeckTransferException;
 import koko.transfer.PortableDeck;
 
@@ -463,10 +464,11 @@ public final class MainController {
     }
 
     /**
-     * Exports the currently selected deck to a new portable UTF-8 JSON file.
+     * Exports the currently selected deck to a portable UTF-8 JSON file.
      *
      * <p>The selected deck UUID is passed to the service, which resolves current
-     * deck and card data and preserves create-new destination behavior.
+     * deck and card data. A non-null result from the native save chooser carries
+     * its replacement confirmation; canceling the chooser carries no consent.
      */
     @FXML
     private void exportSelectedDeck() {
@@ -478,25 +480,21 @@ public final class MainController {
             return;
         }
         UUID selectedDeckId = selected.id();
-        Path destination = chooseExportDestination();
-        if (destination == null) {
-            return;
-        }
-        Path normalizedDestination;
         try {
-            normalizedDestination = TransferFileNames.normalizeDestination(destination);
+            DeckTransfer.ConfirmedDestination destination = TransferFileNames.chooseExportDestination(
+                    selected.name(), this::chooseExportDestination);
+            if (destination == null) {
+                return;
+            }
+            service.exportDeck(selectedDeckId, destination);
+            setGuidance("Exported “" + selected.name() + "” to “" + destination.path()
+                    + "” as UTF-8 JSON.");
         } catch (IllegalArgumentException exception) {
             showTransferError("Deck export destination is invalid", exception.getMessage());
-            return;
-        }
-        try {
-            service.exportDeck(selectedDeckId, normalizedDestination);
-            setGuidance("Exported “" + selected.name() + "” to “" + normalizedDestination
-                    + "” as UTF-8 JSON.");
         } catch (DeckTransferException exception) {
             showTransferError("Deck export was not completed", exception.getMessage()
-                    + "\n\nExisting files are never overwritten. Choose a new filename "
-                    + "and try again.");
+                    + "\n\nThis recoverable failure did not change Koko's data. "
+                    + "Choose the destination again after correcting the issue.");
         }
     }
 
@@ -534,11 +532,19 @@ public final class MainController {
         return source == null ? null : source.toPath();
     }
 
-    private Path chooseExportDestination() {
+    /**
+     * Shows the native save chooser, optionally revisiting the final JSON filename.
+     *
+     * @param suggestion initial filename or full destination after suffix correction.
+     * @return selected path, or null when canceled or closed.
+     */
+    private Path chooseExportDestination(Path suggestion) {
         FileChooser chooser = new FileChooser();
         chooser.setTitle("Export selected deck");
-        Deck selected = deckList.getSelectionModel().getSelectedItem();
-        chooser.setInitialFileName(TransferFileNames.suggestExportFileName(selected.name()));
+        chooser.setInitialFileName(suggestion.getFileName().toString());
+        if (suggestion.getParent() != null) {
+            chooser.setInitialDirectory(suggestion.getParent().toFile());
+        }
         chooser.getExtensionFilters().add(jsonFileFilter());
         File destination = chooser.showSaveDialog(applicationWindow());
         return destination == null ? null : destination.toPath();

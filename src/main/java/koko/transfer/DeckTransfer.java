@@ -6,15 +6,23 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.CopyOption;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
@@ -26,6 +34,27 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 
 import koko.model.Deck;
 import koko.model.VocabularyCard;
+
+/**
+ * Moves an operation-owned temporary file to its final destination.
+ *
+ * <p>The package-private seam lets transfer tests exercise atomic replacement
+ * failures without changing production file operations.
+ */
+@FunctionalInterface
+interface TransferMoveOperation {
+
+    /**
+     * Moves a temporary file to its destination.
+     *
+     * @param source operation-owned temporary file.
+     * @param target final export destination.
+     * @param options required atomic replacement options.
+     * @return the destination path.
+     * @throws IOException if the move cannot be completed.
+     */
+    Path move(Path source, Path target, CopyOption... options) throws IOException;
+}
 
 /**
  * Reads and writes Koko's headless, single-deck portable JSON format.
@@ -45,13 +74,14 @@ public final class DeckTransfer {
             "hiragana", "romaji", "englishMeaning");
     private final ObjectMapper mapper;
     private final OutputStreamFactory outputStreamFactory;
+    private final TransferMoveOperation moveOperation;
 
     /**
      * Creates a transfer component using strict Jackson settings and UTF-8 files.
      */
     public DeckTransfer() {
         this(createMapper(), path -> Files.newOutputStream(path,
-                StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE));
+                StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE), Files::move);
     }
 
     /**
@@ -66,9 +96,86 @@ public final class DeckTransfer {
      * @throws NullPointerException if mapper or outputStreamFactory is null.
      */
     DeckTransfer(ObjectMapper mapper, OutputStreamFactory outputStreamFactory) {
+        this(mapper, outputStreamFactory, Files::move);
+    }
+
+    /**
+     * Creates a transfer component with injectable file-operation seams.
+     *
+     * @param mapper JSON mapper used for parsing and serialization.
+     * @param outputStreamFactory factory used to open export destinations.
+     * @param moveOperation operation used for atomic replacement.
+     * @throws NullPointerException if an argument is null.
+     */
+    DeckTransfer(ObjectMapper mapper, OutputStreamFactory outputStreamFactory,
+            TransferMoveOperation moveOperation) {
         this.mapper = Objects.requireNonNull(mapper, "JSON mapper cannot be null");
         this.outputStreamFactory = Objects.requireNonNull(outputStreamFactory,
                 "Output stream factory cannot be null");
+        this.moveOperation = Objects.requireNonNull(moveOperation, "Move operation cannot be null");
+    }
+
+    /**
+     * Retains the final destination and its state after a native save selection.
+     *
+     * <p>On supported desktop platforms, returning a file means the chooser's
+     * native replacement prompt was accepted when it was shown. The selected
+     * final destination is captured immediately, before serialization. An absent
+     * destination remains create-new even if a file subsequently appears there.
+     */
+    public static final class ConfirmedDestination {
+
+        private final Path path;
+        private final DestinationSnapshot snapshot;
+
+        /**
+         * Captures a chooser result that already has its final filename.
+         *
+         * @param chooserPath path returned by the native save chooser.
+         * @throws DeckTransferException if the destination cannot be checked safely.
+         * @throws NullPointerException if chooserPath is null.
+         */
+        public ConfirmedDestination(Path chooserPath) throws DeckTransferException {
+            this(Objects.requireNonNull(chooserPath, "Chooser path cannot be null")
+                    .toAbsolutePath(), inspectDestination(chooserPath));
+        }
+
+        /** Binds a checked path to its snapshot, rejecting unavailable file identity. */
+        private ConfirmedDestination(Path path, DestinationSnapshot snapshot)
+                throws DeckTransferException {
+            if (snapshot != null && snapshot.fileKey() == null) {
+                throw new DeckTransferException("This provider cannot identify an existing export "
+                        + "safely; choose a new filename");
+            }
+            this.path = path;
+            this.snapshot = snapshot;
+        }
+
+        /**
+         * Captures the final filename only when existing-file consent covers it.
+         *
+         * @param chooserPath non-null native save result.
+         * @param destination final filename after suffix handling.
+         * @return captured destination, or null when another native selection is needed.
+         * @throws DeckTransferException if destination identity cannot be checked safely.
+         * @throws NullPointerException if either path is null.
+         */
+        public static ConfirmedDestination fromNativeSelection(Path chooserPath, Path destination)
+                throws DeckTransferException {
+            Objects.requireNonNull(chooserPath, "Chooser path cannot be null");
+            Path finalPath = Objects.requireNonNull(destination, "Destination cannot be null")
+                    .toAbsolutePath();
+            DestinationSnapshot existing = inspectDestination(finalPath);
+            if (existing != null && !confirmationMatches(chooserPath, finalPath)) {
+                return null;
+            }
+            return new ConfirmedDestination(finalPath, existing);
+        }
+
+        /** Returns the absolute final export path captured with this selection. */
+        public Path path() {
+            return path;
+        }
     }
 
     /**
@@ -122,9 +229,9 @@ public final class DeckTransfer {
      * Validates and creates a new destination file containing one portable deck document.
      *
      * <p>The destination is opened only after serialization completes. Existing
-     * files, directories, and symbolic links are protected by {@code CREATE_NEW};
-     * callers must choose a new filename when the destination already exists.
-     * Missing parent directories are not created.
+     * files are protected by {@code CREATE_NEW}; callers must supply an explicit
+     * native confirmation to replace one. Missing parent directories are not
+     * created.
      *
      * @param document portable deck document to write.
      * @param destination new destination file.
@@ -132,13 +239,55 @@ public final class DeckTransfer {
      * @throws NullPointerException if document or destination is null.
      */
     public void write(PortableDeck document, Path destination) throws DeckTransferException {
+        writeDocument(document, destination, null);
+    }
+
+    /**
+     * Validates and writes a portable deck, honoring native-confirmed replacement.
+     *
+     * <p>Replacement is performed only when the confirmation path identifies the
+     * same actual regular file as the final destination. The complete document is
+     * serialized before an operation-owned sibling temporary file is created,
+     * written, closed, and atomically moved into place. A destination captured
+     * as absent keeps create-new behavior.
+     *
+     * <p>File identity, size, and modification time detect observable changes.
+     * The native-dialog-to-capture and final-check-to-move intervals still allow
+     * races, including concurrent writers and parent-directory swaps. This is
+     * not a locking protocol and does not promise power-loss durability.
+     *
+     * @param document portable deck document to write.
+     * @param confirmation captured native selection and its final destination.
+     * @throws DeckTransferException if validation, serialization, identity checks,
+     *         or file writing fails.
+     * @throws NullPointerException if document or confirmation is null.
+     */
+    public void write(PortableDeck document, ConfirmedDestination confirmation)
+            throws DeckTransferException {
+        Objects.requireNonNull(confirmation, "Confirmed destination cannot be null");
+        writeDocument(document, confirmation.path, confirmation.snapshot);
+    }
+
+    /** Serializes once; a null approved snapshot always requires create-new behavior. */
+    private void writeDocument(PortableDeck document, Path destination, DestinationSnapshot approved)
+            throws DeckTransferException {
         Objects.requireNonNull(document, "Portable deck cannot be null");
         Objects.requireNonNull(destination, "Destination path cannot be null");
         try {
+            Path finalDestination = destination.toAbsolutePath();
+            DestinationSnapshot current = inspectDestination(finalDestination);
+            if (approved != null && (current == null || !approved.matches(current))) {
+                throw new DeckTransferException("The approved export destination changed; "
+                        + "choose the destination again");
+            }
             validate(document);
             String json = mapper.writeValueAsString(document);
             byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-            writeNewFile(bytes, destination);
+            if (approved != null) {
+                replaceExisting(bytes, finalDestination, approved);
+            } else {
+                writeNewFile(bytes, finalDestination);
+            }
         } catch (DeckTransferException exception) {
             throw exception;
         } catch (IOException | RuntimeException exception) {
@@ -176,6 +325,134 @@ public final class DeckTransfer {
             throw new DeckTransferException("Could not complete export to '" + destination
                     + "'. Choose a new filename. The incomplete file was cleaned up when possible: "
                     + describe(exception), exception);
+        }
+    }
+
+    /**
+     * Writes to a unique sibling and atomically replaces the approved target.
+     *
+     * @param bytes serialized UTF-8 document bytes.
+     * @param destination approved existing regular file.
+     * @param approvedSnapshot target attributes captured before writing.
+     * @throws DeckTransferException if the target changes or replacement fails.
+     */
+    private void replaceExisting(byte[] bytes, Path destination,
+            DestinationSnapshot approvedSnapshot) throws DeckTransferException {
+        Path temporary = destination.resolveSibling(destination.getFileName() + ".tmp-"
+                + UUID.randomUUID());
+        boolean created = false;
+        try {
+            try (OutputStream output = outputStreamFactory.open(temporary)) {
+                created = true;
+                output.write(bytes);
+            } catch (IOException | RuntimeException exception) {
+                throw transferFailure("Could not prepare replacement export to '" + destination
+                        + "'. The existing file was preserved: ", exception);
+            }
+
+            DestinationSnapshot current = inspectDestination(destination);
+            if (current == null || !approvedSnapshot.matches(current)) {
+                throw new DeckTransferException("The approved export destination changed before "
+                        + "replacement; the existing file was preserved");
+            }
+            try {
+                moveOperation.move(temporary, destination, StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException exception) {
+                throw new DeckTransferException("Could not replace the export because atomic "
+                        + "replacement is not supported; the existing file was preserved",
+                        exception);
+            } catch (IOException | RuntimeException exception) {
+                throw transferFailure("Could not replace the export safely; the existing file "
+                        + "was preserved: ", exception);
+            }
+        } finally {
+            if (created) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (IOException | SecurityException ignored) {
+                    // The replacement result or original failure is more useful to the caller.
+                }
+            }
+        }
+    }
+
+    /**
+     * Checks whether a chooser result identifies the normalized final destination.
+     *
+     * @param chooserPath path returned by the chooser.
+     * @param destination normalized final destination.
+     * @return true when the paths identify the same destination.
+     * @throws DeckTransferException if identity cannot be checked safely.
+     */
+    private static boolean confirmationMatches(Path chooserPath, Path destination)
+            throws DeckTransferException {
+        Path absoluteChooserPath = chooserPath.toAbsolutePath();
+        if (absoluteChooserPath.equals(destination)) {
+            return true;
+        }
+        if (Files.isSymbolicLink(absoluteChooserPath)) {
+            return false;
+        }
+        DestinationSnapshot chooserSnapshot = inspectDestination(absoluteChooserPath);
+        DestinationSnapshot destinationSnapshot = inspectDestination(destination);
+        if (chooserSnapshot == null || destinationSnapshot == null) {
+            return false;
+        }
+        try {
+            return Files.isSameFile(absoluteChooserPath, destination);
+        } catch (IOException | RuntimeException exception) {
+            throw new DeckTransferException("Could not verify that native replacement consent "
+                    + "covers the final export destination", exception);
+        }
+    }
+
+    /**
+     * Reads a destination without following a final symbolic link.
+     *
+     * @param path destination path.
+     * @return regular-file snapshot, or null when absent.
+     * @throws DeckTransferException if the path is nonregular or cannot be inspected.
+     */
+    private static DestinationSnapshot inspectDestination(Path path) throws DeckTransferException {
+        try {
+            BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class,
+                    LinkOption.NOFOLLOW_LINKS);
+            if (attributes.isSymbolicLink()) {
+                throw new DeckTransferException("Export destination cannot be a symbolic link");
+            }
+            if (!attributes.isRegularFile()) {
+                throw new DeckTransferException("Export destination must be a regular file");
+            }
+            return new DestinationSnapshot(attributes.fileKey(), attributes.size(),
+                    attributes.lastModifiedTime());
+        } catch (NoSuchFileException exception) {
+            return null;
+        } catch (DeckTransferException exception) {
+            throw exception;
+        } catch (IOException | RuntimeException exception) {
+            throw new DeckTransferException("Could not safely inspect export destination", exception);
+        }
+    }
+
+    /** Adds recoverable guidance while retaining the original file-operation failure. */
+    private static DeckTransferException transferFailure(String message, Throwable cause) {
+        return new DeckTransferException(message + describe(cause), cause);
+    }
+
+    /**
+     * Snapshot used to detect observable changes before an approved replacement.
+     *
+     * @param fileKey provider identity, or null when unavailable.
+     * @param size file size in bytes.
+     * @param modifiedTime last modification time.
+     */
+    private record DestinationSnapshot(Object fileKey, long size, FileTime modifiedTime) {
+
+        /** Requires known, matching identity, size, and modification time. */
+        private boolean matches(DestinationSnapshot other) {
+            boolean sameFileKey = fileKey != null && Objects.equals(fileKey, other.fileKey);
+            return sameFileKey && size == other.size && modifiedTime.equals(other.modifiedTime);
         }
     }
 

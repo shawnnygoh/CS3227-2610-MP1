@@ -1,11 +1,27 @@
 package koko.storage;
 
+import java.nio.file.Path;
+import java.util.Optional;
+
 import koko.model.KokoData;
 
 /**
  * Boundary for loading and saving Koko's application state.
  */
 public interface Storage {
+
+    /**
+     * Returns the configured file target when this storage is file-backed.
+     *
+     * <p>The service uses this optional path to prevent portable exports from
+     * replacing Koko's own persisted library. Non-file storage implementations
+     * may return {@link Optional#empty()}.
+     *
+     * @return configured storage file, or empty when no file target is exposed.
+     */
+    default Optional<Path> configuredPath() {
+        return Optional.empty();
+    }
 
     /**
      * Loads the complete application state.

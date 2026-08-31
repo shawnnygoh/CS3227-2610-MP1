@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -102,6 +103,16 @@ public final class JsonStorage implements Storage {
         this.path = Objects.requireNonNull(path, "Storage path cannot be null").toAbsolutePath();
         this.mapper = Objects.requireNonNull(mapper, "JSON mapper cannot be null");
         this.moveOperation = Objects.requireNonNull(moveOperation, "Move operation cannot be null");
+    }
+
+    /**
+     * Returns the absolute configured file target for service-level protection.
+     *
+     * @return absolute storage path.
+     */
+    @Override
+    public Optional<Path> configuredPath() {
+        return Optional.of(path);
     }
 
     @Override
