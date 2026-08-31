@@ -5,17 +5,21 @@ import java.util.Objects;
 
 /**
  * Immutable progress snapshot for one learning mode.
+ *
+ * @param mastery mastery level from zero to five, inclusive.
+ * @param attempts total number of attempts.
+ * @param correctAttempts number of correct attempts.
+ * @param lastReviewedDate date of the latest review, or null if never reviewed.
+ * @param nextDueDate date on which the mode is next due.
  */
-public final class ModeProgress {
+public record ModeProgress(int mastery, int attempts, int correctAttempts,
+        LocalDate lastReviewedDate, LocalDate nextDueDate) {
 
-    private static final int MINIMUM_MASTERY = 0;
-    private static final int MAXIMUM_MASTERY = 5;
+    /** Lowest mastery level the domain allows. */
+    public static final int MINIMUM_MASTERY = 0;
 
-    private final int mastery;
-    private final int attempts;
-    private final int correctAttempts;
-    private final LocalDate lastReviewedDate;
-    private final LocalDate nextDueDate;
+    /** Highest mastery level the domain allows. */
+    public static final int MAXIMUM_MASTERY = 5;
 
     /**
      * Creates a validated progress snapshot.
@@ -28,18 +32,13 @@ public final class ModeProgress {
      * @throws IllegalArgumentException if a numeric invariant is violated.
      * @throws NullPointerException if nextDueDate is null.
      */
-    public ModeProgress(int mastery, int attempts, int correctAttempts,
-            LocalDate lastReviewedDate, LocalDate nextDueDate) {
+    public ModeProgress {
         validateMastery(mastery);
         if (attempts < 0 || correctAttempts < 0 || correctAttempts > attempts) {
             throw new IllegalArgumentException(
                     "Attempts must be non-negative and correct attempts cannot exceed attempts");
         }
-        this.mastery = mastery;
-        this.attempts = attempts;
-        this.correctAttempts = correctAttempts;
-        this.lastReviewedDate = lastReviewedDate;
-        this.nextDueDate = Objects.requireNonNull(nextDueDate, "Next due date cannot be null");
+        Objects.requireNonNull(nextDueDate, "Next due date cannot be null");
     }
 
     /**
@@ -64,29 +63,10 @@ public final class ModeProgress {
         return !nextDueDate.isAfter(Objects.requireNonNull(date, "Date cannot be null"));
     }
 
-    public int mastery() {
-        return mastery;
-    }
-
-    public int attempts() {
-        return attempts;
-    }
-
-    public int correctAttempts() {
-        return correctAttempts;
-    }
-
-    public LocalDate lastReviewedDate() {
-        return lastReviewedDate;
-    }
-
-    public LocalDate nextDueDate() {
-        return nextDueDate;
-    }
-
     private static void validateMastery(int mastery) {
         if (mastery < MINIMUM_MASTERY || mastery > MAXIMUM_MASTERY) {
-            throw new IllegalArgumentException("Mastery must be between 0 and 5");
+            throw new IllegalArgumentException(
+                    "Mastery must be between " + MINIMUM_MASTERY + " and " + MAXIMUM_MASTERY);
         }
     }
 }

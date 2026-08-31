@@ -15,8 +15,6 @@ import koko.model.ModeProgress;
  */
 public final class MasteryScheduler implements ReviewScheduler {
 
-    private static final int MAXIMUM_MASTERY = 5;
-
     /**
      * Computes progress after one review outcome.
      *
@@ -67,8 +65,8 @@ public final class MasteryScheduler implements ReviewScheduler {
      */
     private static int computeMasteryAfter(int currentMastery, ReviewOutcome outcome) {
         return switch (outcome) {
-            case CORRECT -> Math.min(MAXIMUM_MASTERY, currentMastery + 1);
-            case INCORRECT -> Math.max(0, currentMastery - 1);
+            case CORRECT -> Math.min(ModeProgress.MAXIMUM_MASTERY, currentMastery + 1);
+            case INCORRECT -> Math.max(ModeProgress.MINIMUM_MASTERY, currentMastery - 1);
             case SKIPPED -> currentMastery;
         };
     }
