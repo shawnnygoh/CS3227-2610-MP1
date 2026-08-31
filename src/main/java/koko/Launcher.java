@@ -5,7 +5,10 @@ import javafx.application.Application;
 /**
  * Plain entry point that launches the JavaFX application.
  */
-public class Launcher {
+public final class Launcher {
+
+    private Launcher() {
+    }
 
     /**
      * Starts the Koko JavaFX application.

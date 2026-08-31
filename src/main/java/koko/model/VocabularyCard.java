@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.IntPredicate;
 
 /**
  * A globally stored vocabulary entry with independent progress per learning mode.
@@ -145,7 +146,7 @@ public final class VocabularyCard {
     }
 
     private static void addValidationError(List<String> errors, String fieldName, String value,
-            java.util.function.IntPredicate characterRule) {
+            IntPredicate characterRule) {
         if (value.isEmpty()) {
             errors.add(fieldName + " cannot be blank");
         } else if (value.codePoints().anyMatch(characterRule.negate())) {

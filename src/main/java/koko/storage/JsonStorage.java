@@ -36,27 +36,6 @@ import koko.model.ModeProgress;
 import koko.model.VocabularyCard;
 
 /**
- * Moves one path to another using the requested file-system options.
- *
- * <p>The package-private seam lets storage tests inject deterministic move
- * failures. Production storage uses {@link Files#move(Path, Path, CopyOption...)}.
- */
-@FunctionalInterface
-interface MoveOperation {
-
-    /**
-     * Moves a source path to a target path.
-     *
-     * @param source path to move.
-     * @param target replacement path.
-     * @param options move options.
-     * @return the target path.
-     * @throws IOException if the move cannot be completed.
-     */
-    Path move(Path source, Path target, CopyOption... options) throws IOException;
-}
-
-/**
  * Versioned JSON storage for Koko's global cards and ordered decks.
  *
  * <p>Each save serializes to a sibling temporary file and atomically replaces
@@ -468,5 +447,26 @@ public final class JsonStorage implements Storage {
     }
 
     private record RestoredDeck(UUID id, String name, List<UUID> cardIds) {
+    }
+
+    /**
+     * Moves one path to another using the requested file-system options.
+     *
+     * <p>The package-private seam lets storage tests inject deterministic move
+     * failures. Production storage uses {@link Files#move(Path, Path, CopyOption...)}.
+     */
+    @FunctionalInterface
+    interface MoveOperation {
+
+        /**
+         * Moves a source path to a target path.
+         *
+         * @param source path to move.
+         * @param target replacement path.
+         * @param options move options.
+         * @return the target path.
+         * @throws IOException if the move cannot be completed.
+         */
+        Path move(Path source, Path target, CopyOption... options) throws IOException;
     }
 }

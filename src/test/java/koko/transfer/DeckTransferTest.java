@@ -644,7 +644,7 @@ class DeckTransferTest {
     }
 
     /** Deterministic move seam double for atomic replacement tests. */
-    private static final class MoveFailure implements TransferMoveOperation {
+    private static final class MoveFailure implements DeckTransfer.TransferMoveOperation {
 
         private final IOException failure;
         private boolean failMoves = true;

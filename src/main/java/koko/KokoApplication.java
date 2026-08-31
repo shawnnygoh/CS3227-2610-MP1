@@ -20,7 +20,7 @@ import koko.storage.StorageException;
 /**
  * JavaFX application shell for Koko's vocabulary library.
  */
-public class KokoApplication extends Application {
+public final class KokoApplication extends Application {
 
     private static final String MAIN_WINDOW_RESOURCE = "/koko/view/MainWindow.fxml";
     private static final String STYLESHEET_RESOURCE = "/koko/css/koko.css";
@@ -53,10 +53,14 @@ public class KokoApplication extends Application {
     }
 
     /**
-     * Loads the main FXML view from the application classpath.
+     * Loads the root view from an already configured FXML loader.
      *
+     * <p>The loader is created by {@link #createLoader}, which resolves the view
+     * resource up front, so a missing view is reported before this method runs.
+     *
+     * @param loader loader pointed at the main view and given its controller factory.
      * @return the root node defined by the FXML view.
-     * @throws IllegalStateException if the view is missing or cannot be parsed.
+     * @throws IllegalStateException if the view cannot be parsed.
      */
     private Parent loadRootView(FXMLLoader loader) {
         try {

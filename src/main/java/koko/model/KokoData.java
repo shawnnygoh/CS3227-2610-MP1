@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -203,7 +204,7 @@ public final class KokoData {
      * @param cardId card ID to find.
      * @return matching card, or empty when no card has that ID.
      */
-    public java.util.Optional<VocabularyCard> findVocabularyCard(UUID cardId) {
+    public Optional<VocabularyCard> findVocabularyCard(UUID cardId) {
         Objects.requireNonNull(cardId, "Card ID cannot be null");
         return vocabularyCards.stream().filter(card -> card.id().equals(cardId)).findFirst();
     }
@@ -217,7 +218,7 @@ public final class KokoData {
      * @throws IllegalArgumentException if an identity field is blank.
      * @throws NullPointerException if an identity field is null.
      */
-    public java.util.Optional<VocabularyCard> findVocabularyCardByIdentity(String hiragana,
+    public Optional<VocabularyCard> findVocabularyCardByIdentity(String hiragana,
             String englishMeaning) {
         String normalizedHiragana = VocabularyCard.normalizeHiragana(hiragana);
         String normalizedMeaning = VocabularyCard.normalizeEnglishMeaning(englishMeaning);
@@ -233,7 +234,7 @@ public final class KokoData {
      * @param deckId deck ID to find.
      * @return matching deck, or empty when no deck has that ID.
      */
-    public java.util.Optional<Deck> findDeckById(UUID deckId) {
+    public Optional<Deck> findDeckById(UUID deckId) {
         Objects.requireNonNull(deckId, "Deck ID cannot be null");
         return decks.stream().filter(deck -> deck.id().equals(deckId)).findFirst();
     }

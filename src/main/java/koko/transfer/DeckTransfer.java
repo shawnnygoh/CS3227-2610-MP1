@@ -36,27 +36,6 @@ import koko.model.Deck;
 import koko.model.VocabularyCard;
 
 /**
- * Moves an operation-owned temporary file to its final destination.
- *
- * <p>The package-private seam lets transfer tests exercise atomic replacement
- * failures without changing production file operations.
- */
-@FunctionalInterface
-interface TransferMoveOperation {
-
-    /**
-     * Moves a temporary file to its destination.
-     *
-     * @param source operation-owned temporary file.
-     * @param target final export destination.
-     * @param options required atomic replacement options.
-     * @return the destination path.
-     * @throws IOException if the move cannot be completed.
-     */
-    Path move(Path source, Path target, CopyOption... options) throws IOException;
-}
-
-/**
  * Reads and writes Koko's headless, single-deck portable JSON format.
  *
  * <p>The portable format is deliberately separate from Koko's internal storage
@@ -673,5 +652,26 @@ public final class DeckTransfer {
          * @throws IOException if the stream cannot be opened.
          */
         OutputStream open(Path destination) throws IOException;
+    }
+
+    /**
+     * Moves an operation-owned temporary file to its final destination.
+     *
+     * <p>The package-private seam lets transfer tests exercise atomic replacement
+     * failures without changing production file operations.
+     */
+    @FunctionalInterface
+    interface TransferMoveOperation {
+
+        /**
+         * Moves a temporary file to its destination.
+         *
+         * @param source operation-owned temporary file.
+         * @param target final export destination.
+         * @param options required atomic replacement options.
+         * @return the destination path.
+         * @throws IOException if the move cannot be completed.
+         */
+        Path move(Path source, Path target, CopyOption... options) throws IOException;
     }
 }

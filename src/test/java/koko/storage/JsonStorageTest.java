@@ -626,7 +626,7 @@ class JsonStorageTest {
     }
 
     /** Deterministic move seam double that can fail before replacement. */
-    private static final class MoveFailure implements MoveOperation {
+    private static final class MoveFailure implements JsonStorage.MoveOperation {
 
         private final IOException failure;
         private int invocationCount;
