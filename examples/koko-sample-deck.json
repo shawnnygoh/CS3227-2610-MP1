@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "deckName": "Koko Starter Vocabulary",
+  "cards": [
+    { "hiragana": "いえ", "romaji": "ie", "englishMeaning": "house" },
+    { "hiragana": "いす", "romaji": "isu", "englishMeaning": "chair" },
+    { "hiragana": "えき", "romaji": "eki", "englishMeaning": "station" },
+    { "hiragana": "かさ", "romaji": "kasa", "englishMeaning": "umbrella" },
+    { "hiragana": "くるま", "romaji": "kuruma", "englishMeaning": "car" },
+    { "hiragana": "さかな", "romaji": "sakana", "englishMeaning": "fish" },
+    { "hiragana": "しゃしん", "romaji": "shashin", "englishMeaning": "photograph" },
+    { "hiragana": "たまご", "romaji": "tamago", "englishMeaning": "egg" },
+    { "hiragana": "でんしゃ", "romaji": "densha", "englishMeaning": "train" },
+    { "hiragana": "ともだち", "romaji": "tomodachi", "englishMeaning": "friend" },
+    { "hiragana": "ほん", "romaji": "hon", "englishMeaning": "book" },
+    { "hiragana": "みず", "romaji": "mizu", "englishMeaning": "water" }
+  ]
+}
