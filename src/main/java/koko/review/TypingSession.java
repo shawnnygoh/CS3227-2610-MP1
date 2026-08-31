@@ -69,19 +69,7 @@ public final class TypingSession {
     private Feedback feedback;
     private State state;
 
-    /**
-     * Creates a session for cards due for the Typing mode in a selected deck.
-     *
-     * <p>Eligibility is evaluated once using the date from {@code clock}. Cards are
-     * ordered by oldest due date first, with stable deck order for equal due dates.
-     *
-     * @param service service holding the current global cards and decks.
-     * @param deckId selected deck.
-     * @param clock clock used to determine the session start date.
-     * @throws IllegalArgumentException if the deck or a referenced card does not exist.
-     * @throws NullPointerException if an argument is null.
-     */
-    public TypingSession(KokoService service, UUID deckId, Clock clock) {
+    private TypingSession(KokoService service, UUID deckId, Clock clock) {
         this(Objects.requireNonNull(service, "Service cannot be null"),
                 dueCardIds(service, deckId, clock));
     }
@@ -94,6 +82,9 @@ public final class TypingSession {
 
     /**
      * Creates a session for cards due for the Typing mode in a selected deck.
+     *
+     * <p>Eligibility is evaluated once using the date from {@code clock}. Cards are
+     * ordered by oldest due date first, with stable deck order for equal due dates.
      *
      * @param service service holding the current global cards and decks.
      * @param deckId selected deck.

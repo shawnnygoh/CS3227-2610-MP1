@@ -7,6 +7,7 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -135,10 +136,10 @@ public final class MainController {
      */
     public MainController(KokoService service, String startupError, Clock clock,
             Callback<Class<?>, Object> controllerFactory) {
-        this.service = java.util.Objects.requireNonNull(service, "Service cannot be null");
+        this.service = Objects.requireNonNull(service, "Service cannot be null");
         this.startupError = startupError;
-        this.clock = java.util.Objects.requireNonNull(clock, "Clock cannot be null");
-        this.controllerFactory = java.util.Objects.requireNonNull(controllerFactory,
+        this.clock = Objects.requireNonNull(clock, "Clock cannot be null");
+        this.controllerFactory = Objects.requireNonNull(controllerFactory,
                 "Controller factory cannot be null");
     }
 
@@ -247,8 +248,7 @@ public final class MainController {
             setGuidance("Select a global vocabulary card to review it.");
             return;
         }
-        Mode mode = selectedMode;
-        if (mode == Mode.FLASHCARD) {
+        if (selectedMode == Mode.FLASHCARD) {
             startReview(() -> FlashcardSession.forCard(service, selected.id()),
                     "Reviewing the selected global card in Flashcard mode.");
         } else {
@@ -267,8 +267,7 @@ public final class MainController {
             setGuidance("Select a deck to review its due cards.");
             return;
         }
-        Mode mode = selectedMode;
-        if (mode == Mode.FLASHCARD) {
+        if (selectedMode == Mode.FLASHCARD) {
             startReview(() -> FlashcardSession.forDeck(service, selected.id(), clock),
                     "Reviewing due cards from “" + selected.name() + "” in Flashcard mode.");
         } else {
@@ -287,8 +286,7 @@ public final class MainController {
             setGuidance("Select a deck to review all of its cards.");
             return;
         }
-        Mode mode = selectedMode;
-        if (mode == Mode.FLASHCARD) {
+        if (selectedMode == Mode.FLASHCARD) {
             startReview(() -> FlashcardSession.forAllCardsInDeck(service, selected.id()),
                     "Reviewing all cards from “" + selected.name() + "” in Flashcard mode.");
         } else {
@@ -402,12 +400,12 @@ public final class MainController {
             showError("No cards available", "Every global vocabulary card is already in this deck.");
             return;
         }
-        ChoiceDialogResult choice = promptCardChoice(available, selectedDeck.name());
+        VocabularyCard choice = promptCardChoice(available, selectedDeck.name());
         if (choice == null) {
             return;
         }
-        runMutation("Added " + choice.card().hiragana() + " to “" + selectedDeck.name() + "”.", () ->
-                service.addCardToDeck(selectedDeck.id(), choice.card().id()));
+        runMutation("Added " + choice.hiragana() + " to “" + selectedDeck.name() + "”.", () ->
+                service.addCardToDeck(selectedDeck.id(), choice.id()));
     }
 
     @FXML
@@ -648,7 +646,7 @@ public final class MainController {
         }
         var cards = selected.cardIds().stream()
                 .map(id -> service.data().findVocabularyCard(id).orElse(null))
-                .filter(card -> card != null).toList();
+                .filter(Objects::nonNull).toList();
         deckCardList.setItems(FXCollections.observableArrayList(cards));
         deckCardList.setPlaceholder(new Label("This deck is empty. Add an existing card above."));
     }
@@ -748,7 +746,7 @@ public final class MainController {
         return dialog.showAndWait().orElse(null);
     }
 
-    private ChoiceDialogResult promptCardChoice(List<VocabularyCard> cards,
+    private VocabularyCard promptCardChoice(List<VocabularyCard> cards,
             String deckName) {
         List<String> labels = cards.stream()
                 .map(card -> card.hiragana() + "  ·  " + card.romaji()
@@ -761,8 +759,7 @@ public final class MainController {
         dialog.setResultConverter(button -> button == ButtonType.OK
                 ? dialog.getSelectedItem() : null);
         Optional<String> result = dialog.showAndWait();
-        return result.map(label -> new ChoiceDialogResult(cards.get(labels.indexOf(label))))
-                .orElse(null);
+        return result.map(label -> cards.get(labels.indexOf(label))).orElse(null);
     }
 
     private boolean runMutation(String successMessage, Mutation mutation) {
@@ -970,8 +967,5 @@ public final class MainController {
     }
 
     private record CardInput(String hiragana, String romaji, String englishMeaning) {
-    }
-
-    private record ChoiceDialogResult(VocabularyCard card) {
     }
 }

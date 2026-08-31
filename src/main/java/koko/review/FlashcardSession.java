@@ -66,20 +66,7 @@ public final class FlashcardSession {
     private int incorrect;
     private State state;
 
-    /**
-     * Creates a session for the due flashcard cards in a selected deck.
-     *
-     * <p>Eligibility is evaluated once using the date from {@code clock}.
-     * Cards are ordered by oldest due date first, with stable deck order for
-     * equal due dates.
-     *
-     * @param service service holding the current global cards and decks.
-     * @param deckId selected deck.
-     * @param clock clock used to determine the session start date.
-     * @throws IllegalArgumentException if the deck or a referenced card does not exist.
-     * @throws NullPointerException if an argument is null.
-     */
-    public FlashcardSession(KokoService service, UUID deckId, Clock clock) {
+    private FlashcardSession(KokoService service, UUID deckId, Clock clock) {
         this(Objects.requireNonNull(service, "Service cannot be null"),
                 dueCardIds(service, deckId, clock));
     }
@@ -108,7 +95,11 @@ public final class FlashcardSession {
     }
 
     /**
-     * Creates a session for due cards in a selected deck.
+     * Creates a session for the due flashcard cards in a selected deck.
+     *
+     * <p>Eligibility is evaluated once using the date from {@code clock}.
+     * Cards are ordered by oldest due date first, with stable deck order for
+     * equal due dates.
      *
      * @param service service holding the current global cards and decks.
      * @param deckId selected deck.
@@ -225,14 +216,7 @@ public final class FlashcardSession {
         if (outcome == ReviewOutcome.SKIPPED) {
             throw new IllegalArgumentException("Skipped outcomes are not accepted");
         }
-        boolean correctOutcome;
-        if (outcome == ReviewOutcome.CORRECT) {
-            correctOutcome = true;
-        } else if (outcome == ReviewOutcome.INCORRECT) {
-            correctOutcome = false;
-        } else {
-            throw new IllegalArgumentException("Unsupported review outcome");
-        }
+        boolean correctOutcome = outcome == ReviewOutcome.CORRECT;
         requireCurrentCard();
         service.recordFlashcardOutcome(expectedCardId, outcome);
 
