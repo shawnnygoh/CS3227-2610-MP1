@@ -25,6 +25,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
@@ -158,46 +159,9 @@ public final class MainController {
                 selectedMode = Mode.TYPING;
             }
         });
-        vocabularyList.setCellFactory(list -> {
-            ListCell<VocabularyCard> cell = new ListCell<>() {
-                @Override
-                protected void updateItem(VocabularyCard card, boolean empty) {
-                    super.updateItem(card, empty);
-                    setText(empty || card == null ? null
-                            : card.hiragana() + "  ·  " + card.romaji()
-                                    + "  —  " + card.englishMeaning());
-                }
-            };
-            cell.setWrapText(true);
-            cell.setMaxWidth(Double.MAX_VALUE);
-            return cell;
-        });
-        deckList.setCellFactory(list -> {
-            ListCell<Deck> cell = new ListCell<>() {
-                @Override
-                protected void updateItem(Deck deck, boolean empty) {
-                    super.updateItem(deck, empty);
-                    setText(empty || deck == null ? null : deck.name());
-                }
-            };
-            cell.setWrapText(true);
-            cell.setMaxWidth(Double.MAX_VALUE);
-            return cell;
-        });
-        deckCardList.setCellFactory(list -> {
-            ListCell<VocabularyCard> cell = new ListCell<>() {
-                @Override
-                protected void updateItem(VocabularyCard card, boolean empty) {
-                    super.updateItem(card, empty);
-                    setText(empty || card == null ? null
-                            : card.hiragana() + "  ·  " + card.romaji()
-                                    + "  —  " + card.englishMeaning());
-                }
-            };
-            cell.setWrapText(true);
-            cell.setMaxWidth(Double.MAX_VALUE);
-            return cell;
-        });
+        vocabularyList.setCellFactory(cardCellFactory());
+        deckList.setCellFactory(deckCellFactory());
+        deckCardList.setCellFactory(cardCellFactory());
 
         vocabularyList.getSelectionModel().selectedItemProperty()
                 .addListener((observable, oldCard, newCard) -> updateButtonStates());
@@ -212,6 +176,43 @@ public final class MainController {
         if (startupError != null) {
             setGuidance("Storage could not be loaded. The file was not replaced. " + startupError);
         }
+    }
+
+    /** Renders a vocabulary card as its three text fields on one wrapping line. */
+    private static Callback<ListView<VocabularyCard>, ListCell<VocabularyCard>> cardCellFactory() {
+        return list -> wrapping(new ListCell<>() {
+            @Override
+            protected void updateItem(VocabularyCard card, boolean empty) {
+                super.updateItem(card, empty);
+                setText(empty || card == null ? null
+                        : card.hiragana() + "  ·  " + card.romaji()
+                                + "  —  " + card.englishMeaning());
+            }
+        });
+    }
+
+    /** Renders a deck as its name on one wrapping line. */
+    private static Callback<ListView<Deck>, ListCell<Deck>> deckCellFactory() {
+        return list -> wrapping(new ListCell<>() {
+            @Override
+            protected void updateItem(Deck deck, boolean empty) {
+                super.updateItem(deck, empty);
+                setText(empty || deck == null ? null : deck.name());
+            }
+        });
+    }
+
+    /**
+     * Lets a cell wrap instead of truncating when the window is narrow.
+     *
+     * @param cell cell to configure.
+     * @param <T> list item type.
+     * @return the same cell, configured for wrapping.
+     */
+    private static <T> ListCell<T> wrapping(ListCell<T> cell) {
+        cell.setWrapText(true);
+        cell.setMaxWidth(Double.MAX_VALUE);
+        return cell;
     }
 
     /**
@@ -240,7 +241,7 @@ public final class MainController {
 
     @FXML
     private void reviewSelectedCard() {
-        if (!reviewCanStart()) {
+        if (!interactionAllowed()) {
             return;
         }
         VocabularyCard selected = vocabularyList.getSelectionModel().getSelectedItem();
@@ -259,7 +260,7 @@ public final class MainController {
 
     @FXML
     private void reviewDueCards() {
-        if (!reviewCanStart()) {
+        if (!interactionAllowed()) {
             return;
         }
         Deck selected = deckList.getSelectionModel().getSelectedItem();
@@ -278,7 +279,7 @@ public final class MainController {
 
     @FXML
     private void reviewAllCards() {
-        if (!reviewCanStart()) {
+        if (!interactionAllowed()) {
             return;
         }
         Deck selected = deckList.getSelectionModel().getSelectedItem();
@@ -429,7 +430,7 @@ public final class MainController {
      */
     @FXML
     private void importDeck() {
-        if (!transferCanRun()) {
+        if (!interactionAllowed()) {
             return;
         }
         Path source = chooseImportSource();
@@ -467,7 +468,7 @@ public final class MainController {
      */
     @FXML
     private void exportSelectedDeck() {
-        if (!transferCanRun()) {
+        if (!interactionAllowed()) {
             return;
         }
         Deck selected = deckList.getSelectionModel().getSelectedItem();
@@ -497,12 +498,8 @@ public final class MainController {
     private void showHelp() {
         Parent content;
         try {
-            URL resource = MainController.class.getResource(HELP_VIEW_RESOURCE);
-            if (resource == null) {
-                throw new IOException("Required resource not found on classpath: " + HELP_VIEW_RESOURCE);
-            }
-            content = FXMLLoader.load(resource);
-        } catch (IOException exception) {
+            content = FXMLLoader.load(requireResource(HELP_VIEW_RESOURCE));
+        } catch (IOException | RuntimeException exception) {
             showError("Help could not open", exception.getMessage());
             return;
         }
@@ -607,6 +604,26 @@ public final class MainController {
         return imported.get();
     }
 
+    /**
+     * Finds a required view resource on the application classpath.
+     *
+     * <p>A missing resource means the application was packaged incorrectly rather
+     * than that the user did something wrong, so this reports an unchecked failure
+     * that each caller turns into its own dialog.
+     *
+     * @param resourcePath absolute classpath path to the resource.
+     * @return the resource URL.
+     * @throws IllegalStateException if the resource is not on the classpath.
+     */
+    private static URL requireResource(String resourcePath) {
+        URL resource = MainController.class.getResource(resourcePath);
+        if (resource == null) {
+            throw new IllegalStateException("Required resource not found on classpath: "
+                    + resourcePath);
+        }
+        return resource;
+    }
+
     private static FileChooser.ExtensionFilter jsonFileFilter() {
         return new FileChooser.ExtensionFilter("JSON files (*.json)", "*.json");
     }
@@ -674,10 +691,6 @@ public final class MainController {
         removeFromDeckButton.setDisable(!storageReady || !hasDeckCard || reviewActive);
         reviewSelectedCardButton.setDisable(!storageReady || !hasCard || reviewActive);
         reviewDueButton.setDisable(!storageReady || !hasDeck || reviewActive);
-    }
-
-    private boolean transferCanRun() {
-        return startupError == null && !reviewActive();
     }
 
     /**
@@ -751,8 +764,7 @@ public final class MainController {
         List<String> labels = cards.stream()
                 .map(card -> card.hiragana() + "  ·  " + card.romaji()
                         + "  —  " + card.englishMeaning()).toList();
-        javafx.scene.control.ChoiceDialog<String> dialog =
-                new javafx.scene.control.ChoiceDialog<>(labels.get(0), labels);
+        ChoiceDialog<String> dialog = new ChoiceDialog<>(labels.get(0), labels);
         dialog.setTitle("Add card to deck");
         dialog.setHeaderText("Choose an existing global card for “" + deckName + "”");
         dialog.setContentText("Vocabulary card:");
@@ -787,7 +799,12 @@ public final class MainController {
         guidanceLabel.setText(message);
     }
 
-    private boolean reviewCanStart() {
+    /**
+     * Reports whether the management screen may start a new action.
+     *
+     * @return true when storage loaded and no review is in progress.
+     */
+    private boolean interactionAllowed() {
         return startupError == null && !reviewActive();
     }
 
@@ -804,12 +821,7 @@ public final class MainController {
     }
 
     private void loadReviewView(FlashcardSession session, String guidance) throws IOException {
-        URL resource = MainController.class.getResource(REVIEW_VIEW_RESOURCE);
-        if (resource == null) {
-            throw new IllegalStateException("Required resource not found on classpath: "
-                    + REVIEW_VIEW_RESOURCE);
-        }
-        FXMLLoader loader = new FXMLLoader(resource);
+        FXMLLoader loader = new FXMLLoader(requireResource(REVIEW_VIEW_RESOURCE));
         loader.setControllerFactory(controllerFactory);
         Parent reviewRoot = loader.load();
         ReviewController reviewController = loader.getController();
@@ -839,12 +851,7 @@ public final class MainController {
     }
 
     private void loadTypingReviewView(TypingSession session, String guidance) throws IOException {
-        URL resource = MainController.class.getResource(TYPING_REVIEW_VIEW_RESOURCE);
-        if (resource == null) {
-            throw new IllegalStateException("Required resource not found on classpath: "
-                    + TYPING_REVIEW_VIEW_RESOURCE);
-        }
-        FXMLLoader loader = new FXMLLoader(resource);
+        FXMLLoader loader = new FXMLLoader(requireResource(TYPING_REVIEW_VIEW_RESOURCE));
         loader.setControllerFactory(controllerFactory);
         Parent reviewRoot = loader.load();
         TypingReviewController reviewController = loader.getController();
