@@ -1,7 +1,6 @@
 package koko.transfer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.nio.file.Path;
@@ -121,7 +120,6 @@ class ExampleDeckTest {
     }
 
     private static void assertFreshProgress(VocabularyCard card) {
-        assertNotSame(card.progressFor(Mode.FLASHCARD), card.progressFor(Mode.TYPING));
         for (Mode mode : Mode.values()) {
             ModeProgress progress = card.progressFor(mode);
             assertEquals(0, progress.mastery());

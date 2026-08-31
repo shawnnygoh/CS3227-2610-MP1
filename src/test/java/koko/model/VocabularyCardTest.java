@@ -2,16 +2,16 @@ package koko.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
@@ -106,29 +106,29 @@ class VocabularyCardTest {
     }
 
     @Test
-    void cardHasIndependentFreshProgressForEachMode() {
+    void cardHasFreshProgressForEachMode() {
         VocabularyCard card = new VocabularyCard("ねこ", "neko", "cat", CREATION_DATE);
+        ModeProgress expected = new ModeProgress(0, 0, 0, null, CREATION_DATE);
 
-        ModeProgress flashcard = card.progressFor(Mode.FLASHCARD);
-        ModeProgress typing = card.progressFor(Mode.TYPING);
-        assertNotSame(flashcard, typing);
-        assertEquals(0, flashcard.mastery());
-        assertEquals(0, typing.attempts());
-        assertEquals(CREATION_DATE, flashcard.nextDueDate());
-        assertEquals(CREATION_DATE, typing.nextDueDate());
+        for (Mode mode : Mode.values()) {
+            assertEquals(expected, card.progressFor(mode));
+        }
     }
 
-    @Test
-    void cardProgressUpdatesDoNotAffectTheOtherMode() {
-        VocabularyCard card = new VocabularyCard("ねこ", "neko", "cat", CREATION_DATE);
-        ModeProgress updatedFlashcard = new ModeProgress(2, 3, 2,
+    @ParameterizedTest
+    @EnumSource(Mode.class)
+    void cardProgressUpdatesDoNotAffectOtherModeWithSharedInitialProgress(Mode updatedMode) {
+        ModeProgress initial = new ModeProgress(0, 0, 0, null, CREATION_DATE);
+        VocabularyCard card = VocabularyCard.restore(UUID.randomUUID(), "ねこ", "neko", "cat",
+                initial, initial);
+        ModeProgress updated = new ModeProgress(2, 3, 2,
                 CREATION_DATE.plusDays(1), CREATION_DATE.plusDays(4));
 
-        card.updateProgress(Mode.FLASHCARD, updatedFlashcard);
+        card.updateProgress(updatedMode, updated);
 
-        assertSame(updatedFlashcard, card.progressFor(Mode.FLASHCARD));
-        assertEquals(0, card.progressFor(Mode.TYPING).mastery());
-        assertEquals(0, card.progressFor(Mode.TYPING).attempts());
+        for (Mode mode : Mode.values()) {
+            assertEquals(mode == updatedMode ? updated : initial, card.progressFor(mode));
+        }
     }
 
     @Test
@@ -148,8 +148,8 @@ class VocabularyCardTest {
         assertEquals("ねこ", card.hiragana());
         assertEquals("neko2", card.romaji());
         assertEquals("animal", card.englishMeaning());
-        assertSame(flashcard, card.progressFor(Mode.FLASHCARD));
-        assertSame(typing, card.progressFor(Mode.TYPING));
+        assertEquals(flashcard, card.progressFor(Mode.FLASHCARD));
+        assertEquals(typing, card.progressFor(Mode.TYPING));
     }
 
     @Test

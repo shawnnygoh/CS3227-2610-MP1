@@ -25,8 +25,8 @@ public final class KokoDataSnapshots {
      *
      * <p>Cards, decks, and their collections are rebuilt. Progress records are
      * shared rather than rebuilt, because {@code ModeProgress} is immutable and
-     * a card replaces a mode's entry instead of mutating it. The two per-mode
-     * records on a card stay distinct, which some tests assert.
+     * a card replaces a mode's entry instead of mutating it. Mode independence
+     * does not require distinct progress instances.
      *
      * @param source aggregate to copy.
      * @return a detached aggregate with the same UUIDs, values, order, and memberships.

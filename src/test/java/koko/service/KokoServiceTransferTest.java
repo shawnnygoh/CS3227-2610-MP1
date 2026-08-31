@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -741,7 +740,6 @@ class KokoServiceTransferTest {
     }
 
     private static void assertFreshProgress(VocabularyCard card, LocalDate date) {
-        assertNotSame(card.progressFor(Mode.FLASHCARD), card.progressFor(Mode.TYPING));
         for (Mode mode : Mode.values()) {
             ModeProgress progress = card.progressFor(mode);
             assertEquals(0, progress.mastery());
