@@ -780,6 +780,52 @@ class KokoServiceTest {
         assertEquals(2, storage.successfulSaveCount);
     }
 
+    @Test
+    void suppliedSchedulerReplacesTheDefaultPolicyAndReceivesTheReviewedProgress()
+            throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        // No mastery policy produces a 99-day interval, so this result can only
+        // come from the injected scheduler.
+        RecordingScheduler scheduler = new RecordingScheduler(
+                new ModeProgress(5, 1, 1, CREATION_DATE, CREATION_DATE.plusDays(99)));
+        KokoService service = new KokoService(storage, FIXED_CLOCK, scheduler);
+        VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
+        ModeProgress beforeReview = card.progressFor(Mode.FLASHCARD);
+        ModeProgress typingBeforeReview = card.progressFor(Mode.TYPING);
+
+        service.recordFlashcardOutcome(card.id(), ReviewOutcome.CORRECT);
+
+        VocabularyCard updated = currentCard(service, card.id());
+        assertEquals(5, updated.progressFor(Mode.FLASHCARD).mastery());
+        assertEquals(CREATION_DATE.plusDays(99),
+                updated.progressFor(Mode.FLASHCARD).nextDueDate());
+        assertProgressEquals(typingBeforeReview, updated.progressFor(Mode.TYPING));
+        assertEquals(1, scheduler.invocations);
+        assertProgressEquals(beforeReview, scheduler.lastProgress);
+        assertEquals(ReviewOutcome.CORRECT, scheduler.lastOutcome);
+        assertEquals(CREATION_DATE, scheduler.lastReviewDate);
+    }
+
+    @Test
+    void typingOutcomesAlsoUseTheSuppliedScheduler() throws StorageException {
+        RecordingScheduler scheduler = new RecordingScheduler(
+                new ModeProgress(4, 2, 1, CREATION_DATE, CREATION_DATE.plusDays(77)));
+        KokoService service = new KokoService(new FakeStorage(), FIXED_CLOCK, scheduler);
+        VocabularyCard card = service.addVocabularyCard("いぬ", "inu", "dog");
+
+        service.recordTypingOutcome(card.id(), ReviewOutcome.SKIPPED);
+
+        assertEquals(CREATION_DATE.plusDays(77),
+                currentCard(service, card.id()).progressFor(Mode.TYPING).nextDueDate());
+        assertEquals(ReviewOutcome.SKIPPED, scheduler.lastOutcome);
+    }
+
+    @Test
+    void serviceRejectsAMissingScheduler() {
+        assertThrows(NullPointerException.class, () ->
+                new KokoService(new FakeStorage(), FIXED_CLOCK, null));
+    }
+
     private static VocabularyCard currentCard(KokoService service, UUID cardId) {
         return service.data().findVocabularyCard(cardId).orElseThrow();
     }
@@ -850,6 +896,35 @@ class KokoServiceTest {
     @FunctionalInterface
     private interface StorageMutation {
         void run() throws StorageException;
+    }
+
+    /**
+     * Scheduler double that records its inputs and returns one fixed result.
+     *
+     * <p>The fixed result is deliberately unreachable by {@link MasteryScheduler},
+     * so a test can tell the injected policy apart from the default one.
+     */
+    private static final class RecordingScheduler implements ReviewScheduler {
+
+        private final ModeProgress result;
+        private ModeProgress lastProgress;
+        private ReviewOutcome lastOutcome;
+        private LocalDate lastReviewDate;
+        private int invocations;
+
+        private RecordingScheduler(ModeProgress result) {
+            this.result = result;
+        }
+
+        @Override
+        public ModeProgress schedule(ModeProgress progress, ReviewOutcome outcome,
+                LocalDate reviewDate) {
+            lastProgress = progress;
+            lastOutcome = outcome;
+            lastReviewDate = reviewDate;
+            invocations++;
+            return result;
+        }
     }
 
     /** Fails a requested save before writing to real JSON storage. */

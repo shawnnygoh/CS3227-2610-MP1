@@ -42,19 +42,36 @@ public final class KokoService {
 
     private final Storage storage;
     private final Clock clock;
+    private final ReviewScheduler scheduler;
     private final DeckTransfer deckTransfer;
     private KokoData data;
 
     /**
-     * Creates a service with an empty current state.
+     * Creates a service with an empty current state and Koko's default scheduler.
      *
      * @param storage persistence boundary.
      * @param clock clock used for new-card creation dates.
      * @throws NullPointerException if storage or clock is null.
      */
     public KokoService(Storage storage, Clock clock) {
+        this(storage, clock, new MasteryScheduler());
+    }
+
+    /**
+     * Creates a service with an empty current state and a supplied scheduler.
+     *
+     * <p>The scheduler seam lets a caller substitute the spaced-repetition policy
+     * without changing how outcomes are validated, persisted, and published.
+     *
+     * @param storage persistence boundary.
+     * @param clock clock used for new-card creation dates.
+     * @param scheduler policy that computes progress after each review outcome.
+     * @throws NullPointerException if storage, clock, or scheduler is null.
+     */
+    public KokoService(Storage storage, Clock clock, ReviewScheduler scheduler) {
         this.storage = Objects.requireNonNull(storage, "Storage cannot be null");
         this.clock = Objects.requireNonNull(clock, "Clock cannot be null");
+        this.scheduler = Objects.requireNonNull(scheduler, "Review scheduler cannot be null");
         deckTransfer = new DeckTransfer();
         data = new KokoData();
     }
@@ -479,8 +496,7 @@ public final class KokoService {
         KokoData candidate = copyOf(data);
         VocabularyCard card = candidate.findVocabularyCard(cardId)
                 .orElseThrow(() -> new IllegalArgumentException("Vocabulary card does not exist"));
-        ModeProgress scheduled = new MasteryScheduler().schedule(
-                card.progressFor(mode), outcome, reviewDate);
+        ModeProgress scheduled = scheduler.schedule(card.progressFor(mode), outcome, reviewDate);
         card.updateProgress(mode, scheduled);
         storage.save(candidate);
         data = candidate;
