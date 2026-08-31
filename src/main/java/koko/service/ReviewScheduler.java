@@ -17,7 +17,6 @@ public interface ReviewScheduler {
      * @param reviewDate actual date on which the review occurred.
      * @return a new immutable progress object containing the review result.
      * @throws NullPointerException if an argument is null.
-     * @throws IllegalArgumentException if the attempt count is already at {@link Integer#MAX_VALUE}.
      * @throws java.time.DateTimeException if the next due date exceeds the range supported by {@link LocalDate}.
      */
     ModeProgress schedule(ModeProgress progress, ReviewOutcome outcome, LocalDate reviewDate);

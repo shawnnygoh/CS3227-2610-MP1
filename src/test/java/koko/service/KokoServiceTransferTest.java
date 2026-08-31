@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -88,10 +87,8 @@ class KokoServiceTransferTest {
         VocabularyCard shared = initial.addVocabularyCard("ねこ", "neko", "cat", FIRST_DATE);
         VocabularyCard unassigned = initial.addVocabularyCard("いぬ", "inu", "dog", FIRST_DATE);
         KokoService service = new KokoService(storage, FIRST_CLOCK);
-        ModeProgress sharedFlashcard = new ModeProgress(4, 7, 5,
-                FIRST_DATE.minusDays(2), FIRST_DATE.plusDays(8));
-        ModeProgress sharedTyping = new ModeProgress(2, 3, 1,
-                FIRST_DATE.minusDays(1), FIRST_DATE.plusDays(4));
+        ModeProgress sharedFlashcard = new ModeProgress(4, FIRST_DATE.plusDays(8));
+        ModeProgress sharedTyping = new ModeProgress(2, FIRST_DATE.plusDays(4));
         shared.updateProgress(Mode.FLASHCARD, sharedFlashcard);
         shared.updateProgress(Mode.TYPING, sharedTyping);
         unassigned.updateProgress(Mode.TYPING, sharedFlashcard);
@@ -382,10 +379,8 @@ class KokoServiceTransferTest {
         JsonStorage jsonStorage = new JsonStorage(storagePath);
         KokoData initial = new KokoData();
         VocabularyCard existing = initial.addVocabularyCard("ねこ", "neko", "cat", FIRST_DATE);
-        existing.updateProgress(Mode.FLASHCARD, new ModeProgress(4, 8, 6,
-                FIRST_DATE.minusDays(2), FIRST_DATE.plusDays(14)));
-        existing.updateProgress(Mode.TYPING, new ModeProgress(2, 5, 3,
-                FIRST_DATE.minusDays(1), FIRST_DATE.plusDays(3)));
+        existing.updateProgress(Mode.FLASHCARD, new ModeProgress(4, FIRST_DATE.plusDays(14)));
+        existing.updateProgress(Mode.TYPING, new ModeProgress(2, FIRST_DATE.plusDays(3)));
         Deck existingDeck = initial.createDeck("Existing");
         initial.addCardToDeck(existingDeck.id(), existing.id());
         jsonStorage.save(initial);
@@ -470,7 +465,7 @@ class KokoServiceTransferTest {
                 .orElseThrow();
         UUID firstDeckCard = service.data().findDeckById(firstDeck.id()).orElseThrow().cardIds().get(0);
         assertSame(shared, service.data().findVocabularyCard(firstDeckCard).orElseThrow());
-        assertProgressEquals(new ModeProgress(1, 1, 1, FIRST_DATE, FIRST_DATE.plusDays(1)),
+        assertProgressEquals(new ModeProgress(1, FIRST_DATE.plusDays(1)),
                 shared.progressFor(Mode.TYPING));
         assertProgressEquals(ModeProgress.forCreationDate(FIRST_DATE),
                 shared.progressFor(Mode.FLASHCARD));
@@ -485,11 +480,9 @@ class KokoServiceTransferTest {
         VocabularyCard first = service.addVocabularyCard("ねこ", "neko", "cat");
         VocabularyCard second = service.addVocabularyCard("いぬ", "inu", "dog");
         service.data().findVocabularyCard(first.id()).orElseThrow().updateProgress(
-                Mode.FLASHCARD, new ModeProgress(5, 9, 8,
-                FIRST_DATE.minusDays(3), FIRST_DATE.plusDays(30)));
+                Mode.FLASHCARD, new ModeProgress(5, FIRST_DATE.plusDays(30)));
         service.data().findVocabularyCard(second.id()).orElseThrow().updateProgress(
-                Mode.TYPING, new ModeProgress(3, 4, 2,
-                FIRST_DATE.minusDays(2), FIRST_DATE.plusDays(10)));
+                Mode.TYPING, new ModeProgress(3, FIRST_DATE.plusDays(10)));
         Deck deck = service.createDeck("動物 \"\\");
         service.addCardToDeck(deck.id(), second.id());
         service.addCardToDeck(deck.id(), first.id());
@@ -743,9 +736,6 @@ class KokoServiceTransferTest {
         for (Mode mode : Mode.values()) {
             ModeProgress progress = card.progressFor(mode);
             assertEquals(0, progress.mastery());
-            assertEquals(0, progress.attempts());
-            assertEquals(0, progress.correctAttempts());
-            assertNull(progress.lastReviewedDate());
             assertEquals(date, progress.nextDueDate());
         }
     }
@@ -777,9 +767,6 @@ class KokoServiceTransferTest {
 
     private static void assertProgressEquals(ModeProgress expected, ModeProgress actual) {
         assertEquals(expected.mastery(), actual.mastery());
-        assertEquals(expected.attempts(), actual.attempts());
-        assertEquals(expected.correctAttempts(), actual.correctAttempts());
-        assertEquals(expected.lastReviewedDate(), actual.lastReviewedDate());
         assertEquals(expected.nextDueDate(), actual.nextDueDate());
     }
 

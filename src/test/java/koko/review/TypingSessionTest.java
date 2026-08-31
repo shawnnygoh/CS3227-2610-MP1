@@ -346,9 +346,9 @@ class TypingSessionTest {
         VocabularyCard first = context.addCard("ね", "ne", "first");
         VocabularyCard second = context.addCard("こ", "ko", "second");
         currentCard(context.service, first.id()).updateProgress(Mode.TYPING,
-                new ModeProgress(2, 3, 1, START_DATE.minusDays(1), START_DATE));
+                new ModeProgress(2, START_DATE));
         currentCard(context.service, second.id()).updateProgress(Mode.TYPING,
-                new ModeProgress(3, 5, 2, START_DATE.minusDays(1), START_DATE));
+                new ModeProgress(3, START_DATE));
         Deck deck = context.service.createDeck("Words");
         addToDeck(context.service, deck, first, second);
         TypingSession session = TypingSession.forDeck(context.service, deck.id(), FIXED_CLOCK);
@@ -369,8 +369,7 @@ class TypingSessionTest {
         assertEquals(1, context.storage.saveInvocations - savesBeforeFailure);
 
         session.submit(first.id(), "ね");
-        ModeProgress expectedFirst = new ModeProgress(3, 4, 2,
-                START_DATE, START_DATE.plusDays(7));
+        ModeProgress expectedFirst = new ModeProgress(3, START_DATE.plusDays(7));
         assertProgressEquals(expectedFirst, context.service.data().findVocabularyCard(first.id())
                 .orElseThrow().progressFor(Mode.TYPING));
         assertProgressEquals(expectedFirst, context.storage.load().findVocabularyCard(first.id())
@@ -394,8 +393,7 @@ class TypingSessionTest {
         assertEquals(new TypingSession.Summary(2, 1, 0, 0, 1, 1, false), session.summary());
         assertEquals(3, context.storage.saveInvocations - savesBeforeFailure);
         session.skip(second.id());
-        ModeProgress expectedSecond = new ModeProgress(3, 6, 2,
-                START_DATE, START_DATE.plusDays(1));
+        ModeProgress expectedSecond = new ModeProgress(3, START_DATE.plusDays(1));
         assertProgressEquals(expectedSecond, context.service.data().findVocabularyCard(second.id())
                 .orElseThrow().progressFor(Mode.TYPING));
         assertProgressEquals(expectedSecond, context.storage.load().findVocabularyCard(second.id())
@@ -438,8 +436,7 @@ class TypingSessionTest {
         TestContext context = new TestContext(clock);
         VocabularyCard card = context.addCard("ねこ", "neko", "cat");
         ModeProgress originalFlashcard = card.progressFor(Mode.FLASHCARD);
-        ModeProgress originalTyping = new ModeProgress(2, 4, 3,
-                START_DATE.minusDays(2), START_DATE);
+        ModeProgress originalTyping = new ModeProgress(2, START_DATE);
         card.updateProgress(Mode.TYPING, originalTyping);
         Deck first = context.service.createDeck("First");
         Deck second = context.service.createDeck("Second");
@@ -452,8 +449,7 @@ class TypingSessionTest {
         firstSession.submit(card.id(), "ねこ");
         ModeProgress updated = context.service.data().findVocabularyCard(card.id()).orElseThrow()
                 .progressFor(Mode.TYPING);
-        assertProgressEquals(new ModeProgress(3, 5, 4, LocalDate.of(2026, 9, 1),
-                LocalDate.of(2026, 9, 8)), updated);
+        assertProgressEquals(new ModeProgress(3, LocalDate.of(2026, 9, 8)), updated);
         assertProgressEquals(originalFlashcard, context.service.data()
                 .findVocabularyCard(card.id()).orElseThrow().progressFor(Mode.FLASHCARD));
 
@@ -473,8 +469,7 @@ class TypingSessionTest {
         TestContext context = new TestContext(clock);
         VocabularyCard card = context.addCard("ねこ", "neko", "cat");
         ModeProgress originalFlashcard = card.progressFor(Mode.FLASHCARD);
-        ModeProgress originalTyping = new ModeProgress(2, 4, 3,
-                START_DATE.minusDays(2), START_DATE.plusDays(20));
+        ModeProgress originalTyping = new ModeProgress(2, START_DATE.plusDays(20));
         card.updateProgress(Mode.TYPING, originalTyping);
         Deck first = context.service.createDeck("First");
         Deck second = context.service.createDeck("Second");
@@ -488,8 +483,8 @@ class TypingSessionTest {
         firstSession.next(card.id());
 
         VocabularyCard updated = context.service.data().findVocabularyCard(card.id()).orElseThrow();
-        assertProgressEquals(new ModeProgress(3, 5, 4, LocalDate.of(2026, 9, 1),
-                LocalDate.of(2026, 9, 8)), updated.progressFor(Mode.TYPING));
+        assertProgressEquals(new ModeProgress(3, LocalDate.of(2026, 9, 8)),
+                updated.progressFor(Mode.TYPING));
         assertProgressEquals(originalFlashcard, updated.progressFor(Mode.FLASHCARD));
         assertEquals(TypingSession.State.COMPLETED,
                 TypingSession.forDeck(context.service, second.id(), clock).state());
@@ -528,9 +523,10 @@ class TypingSessionTest {
 
         session.submit(card.id(), card.hiragana());
         VocabularyCard updated = context.service.data().findVocabularyCard(card.id()).orElseThrow();
-        assertEquals(1, updated.progressFor(Mode.TYPING).attempts());
-        assertEquals(1, context.storage.load().findVocabularyCard(card.id()).orElseThrow()
-                .progressFor(Mode.TYPING).attempts());
+        ModeProgress expected = new ModeProgress(1, START_DATE.plusDays(1));
+        assertProgressEquals(expected, updated.progressFor(Mode.TYPING));
+        assertProgressEquals(expected, context.storage.load().findVocabularyCard(card.id()).orElseThrow()
+                .progressFor(Mode.TYPING));
         assertEquals(savesBeforeFailure + 2, context.storage.saveInvocations);
         assertEquals(successfulSavesBeforeFailure + 1, context.storage.successfulSaveCount);
         assertEquals(1, session.attempted());
@@ -557,8 +553,9 @@ class TypingSessionTest {
         KokoService restored = new KokoService(storage, FIXED_CLOCK);
         restored.load();
         VocabularyCard restoredCard = restored.data().findVocabularyCard(card.id()).orElseThrow();
-        assertEquals(1, restoredCard.progressFor(Mode.TYPING).attempts());
-        assertEquals(0, restoredCard.progressFor(Mode.FLASHCARD).attempts());
+        assertProgressEquals(new ModeProgress(1, START_DATE.plusDays(1)),
+                restoredCard.progressFor(Mode.TYPING));
+        assertProgressEquals(ModeProgress.forCreationDate(START_DATE), restoredCard.progressFor(Mode.FLASHCARD));
         assertEquals(List.of(card.id()), restored.data().findDeckById(deck.id()).orElseThrow()
                 .cardIds());
     }
@@ -573,8 +570,7 @@ class TypingSessionTest {
     private static void setDueDate(KokoService service, UUID cardId, Mode mode, LocalDate dueDate) {
         VocabularyCard card = service.data().findVocabularyCard(cardId).orElseThrow();
         ModeProgress original = card.progressFor(mode);
-        card.updateProgress(mode, new ModeProgress(original.mastery(), original.attempts(),
-                original.correctAttempts(), original.lastReviewedDate(), dueDate));
+        card.updateProgress(mode, new ModeProgress(original.mastery(), dueDate));
     }
 
     private static VocabularyCard currentCard(KokoService service, UUID cardId) {
@@ -583,9 +579,6 @@ class TypingSessionTest {
 
     private static void assertProgressEquals(ModeProgress expected, ModeProgress actual) {
         assertEquals(expected.mastery(), actual.mastery());
-        assertEquals(expected.attempts(), actual.attempts());
-        assertEquals(expected.correctAttempts(), actual.correctAttempts());
-        assertEquals(expected.lastReviewedDate(), actual.lastReviewedDate());
         assertEquals(expected.nextDueDate(), actual.nextDueDate());
     }
 

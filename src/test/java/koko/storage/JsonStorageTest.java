@@ -3,7 +3,6 @@ package koko.storage;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -57,7 +56,7 @@ class JsonStorageTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"\\n", "\\r", "\\t", "\\u2028", "\\u2029"})
-    void legacyEmbeddedControlsFailLoadingWithoutRewritingTheLibrary(String escaped) throws Exception {
+    void embeddedControlsFailLoadingWithoutRewritingTheLibrary(String escaped) throws Exception {
         Path path = writeDocument(validInternalDocument().replace("ねこ", "ね" + escaped + "こ"));
         byte[] originalBytes = Files.readAllBytes(path);
 
@@ -87,10 +86,8 @@ class JsonStorageTest {
         KokoData original = new KokoData();
         VocabularyCard first = original.addVocabularyCard("ねこ", "neko", "cat", CREATION_DATE);
         VocabularyCard second = original.addVocabularyCard("いぬ", "inu", "dog", CREATION_DATE);
-        first.updateProgress(Mode.FLASHCARD, new ModeProgress(4, 7, 5,
-                CREATION_DATE.plusDays(1), CREATION_DATE.plusDays(15)));
-        first.updateProgress(Mode.TYPING, new ModeProgress(2, 3, 1,
-                CREATION_DATE.plusDays(2), CREATION_DATE.plusDays(4)));
+        first.updateProgress(Mode.FLASHCARD, new ModeProgress(4, CREATION_DATE.plusDays(15)));
+        first.updateProgress(Mode.TYPING, new ModeProgress(2, CREATION_DATE.plusDays(4)));
         Deck firstDeck = original.createDeck("First");
         Deck secondDeck = original.createDeck("Second");
         original.addCardToDeck(firstDeck.id(), second.id());
@@ -117,18 +114,27 @@ class JsonStorageTest {
     }
 
     @Test
-    void validSyntheticDocumentWithNullableDateRoundTrips() throws IOException, StorageException {
+    void validDocumentLoadsAndSavesOnlyTheCurrentSchema() throws IOException, StorageException {
         Path path = writeDocument(validInternalDocument());
+        byte[] originalBytes = Files.readAllBytes(path);
+        JsonStorage storage = new JsonStorage(path);
 
-        KokoData loaded = new JsonStorage(path).load();
+        KokoData loaded = storage.load();
 
         VocabularyCard card = loaded.vocabularyCards().getFirst();
         assertEquals("neko", card.romaji());
         assertEquals("cat", card.englishMeaning());
-        assertEquals(1, card.progressFor(Mode.FLASHCARD).mastery());
-        assertEquals(2, card.progressFor(Mode.TYPING).attempts());
-        assertNull(card.progressFor(Mode.FLASHCARD).lastReviewedDate());
+        assertProgressEquals(new ModeProgress(1, CREATION_DATE), card.progressFor(Mode.FLASHCARD));
+        assertProgressEquals(new ModeProgress(2, CREATION_DATE.plusDays(2)), card.progressFor(Mode.TYPING));
         assertEquals("Core", loaded.decks().getFirst().name());
+        assertArrayEquals(originalBytes, Files.readAllBytes(path));
+
+        storage.save(loaded);
+
+        // Compare the complete format, including exact progress fields, without
+        // relying on whitespace or JSON object property order.
+        ObjectMapper mapper = new ObjectMapper();
+        assertEquals(mapper.readTree(validInternalDocument()), mapper.readTree(path.toFile()));
     }
 
     @Test
@@ -178,9 +184,6 @@ class JsonStorageTest {
         assertEquals("neko", restored.romaji());
         assertEquals("cat", restored.englishMeaning());
         assertEquals(1, progress.mastery());
-        assertEquals(1, progress.attempts());
-        assertEquals(1, progress.correctAttempts());
-        assertEquals(CREATION_DATE, progress.lastReviewedDate());
         assertEquals(CREATION_DATE.plusDays(1), progress.nextDueDate());
         assertEquals(List.of(deck.id()), restoredService.data().decks().stream()
                 .map(Deck::id).toList());
@@ -267,14 +270,14 @@ class JsonStorageTest {
     @Test
     void invalidProgressValuesAreRejected() throws IOException {
         String invalidMastery = document("1", "[" + cardJson(CARD_ID, 6) + "]", "[]");
-        String negativeAttempts = document("1", "["
-                + cardJson(CARD_ID, 0, -1, 0, null, "2026-08-29") + "]", "[]");
-        String tooManyCorrectAttempts = document("1", "["
-                + cardJson(CARD_ID, 0, 1, 2, null, "2026-08-29") + "]", "[]");
+        String negativeMastery = document("1", "[" + cardJson(CARD_ID, -1) + "]", "[]");
+        String nullDueDate = document("1", "[" + cardJson(CARD_ID, 0, null) + "]", "[]");
+        String nullMastery = replace(validInternalDocument(), "\"mastery\":1", "\"mastery\":null");
 
         assertRejected(invalidMastery);
-        assertRejected(negativeAttempts);
-        assertRejected(tooManyCorrectAttempts);
+        assertRejected(negativeMastery);
+        assertRejected(nullDueDate);
+        assertRejected(nullMastery);
     }
 
     @Test
@@ -321,11 +324,18 @@ class JsonStorageTest {
                 + "\"romaji\":\"neko\",\"englishMeaning\":\"cat\","
                 + "\"progress\":{}}],\"decks\":[]}";
         String unknownField = document("1", "[]", "[]").replace("\"decks\"", "\"extra\":true,\"decks\"");
+        String missingMastery = replace(validInternalDocument(), "\"mastery\":1,", "");
+        String missingDueDate = replace(validInternalDocument(), ",\"nextDueDate\":\"2026-08-29\"", "");
+        String unknownProgressField = replace(validInternalDocument(), "\"mastery\":1",
+                "\"mastery\":1,\"extra\":true");
         String trailingJson = document("1", "[]", "[]") + "{}";
 
         assertRejected(missingCards);
         assertRejected(missingModeProgress);
         assertRejected(unknownField);
+        assertRejected(missingMastery);
+        assertRejected(missingDueDate);
+        assertRejected(unknownProgressField);
         assertRejected(trailingJson);
     }
 
@@ -333,7 +343,7 @@ class JsonStorageTest {
     void malformedIdentifiersAndDatesAreRejected() throws IOException {
         String badCardId = document("1", "[" + cardJson("not-a-uuid", 0) + "]", "[]");
         String badDate = document("1", "["
-                + cardJson(CARD_ID, 0, 0, 0, "not-a-date", "2026-08-29") + "]", "[]");
+                + cardJson(CARD_ID, 0, "not-a-date") + "]", "[]");
 
         assertRejected(badCardId);
         assertRejected(badDate);
@@ -531,18 +541,6 @@ class JsonStorageTest {
                         "\"FLASHCARD\":{\"mastery\":1", "\"FLASHCARD\":{\"mastery\":5.9")),
                 Arguments.of("typingMastery", replace(valid,
                         "\"TYPING\":{\"mastery\":2", "\"TYPING\":{\"mastery\":2.9")),
-                Arguments.of("flashcardAttempts", replace(valid,
-                        "\"FLASHCARD\":{\"mastery\":1,\"attempts\":2",
-                        "\"FLASHCARD\":{\"mastery\":1,\"attempts\":0.9")),
-                Arguments.of("typingAttempts", replace(valid,
-                        "\"TYPING\":{\"mastery\":2,\"attempts\":2",
-                        "\"TYPING\":{\"mastery\":2,\"attempts\":2.9")),
-                Arguments.of("flashcardCorrectAttempts", replace(valid,
-                        "\"FLASHCARD\":{\"mastery\":1,\"attempts\":2,\"correctAttempts\":1",
-                        "\"FLASHCARD\":{\"mastery\":1,\"attempts\":2,\"correctAttempts\":1.9")),
-                Arguments.of("typingCorrectAttempts", replace(valid,
-                        "\"TYPING\":{\"mastery\":2,\"attempts\":2,\"correctAttempts\":1",
-                        "\"TYPING\":{\"mastery\":2,\"attempts\":2,\"correctAttempts\":1.9")),
                 Arguments.of("cardId", replace(valid, "\"id\":\"" + CARD_ID + "\"",
                         "\"id\":123")),
                 Arguments.of("hiragana", replace(valid, "\"hiragana\":\"ねこ\"",
@@ -551,8 +549,6 @@ class JsonStorageTest {
                         "\"romaji\":123")),
                 Arguments.of("englishMeaning", replace(valid, "\"englishMeaning\":\"cat\"",
                         "\"englishMeaning\":true")),
-                Arguments.of("lastReviewedDate", replace(valid, "\"lastReviewedDate\":null",
-                        "\"lastReviewedDate\":123")),
                 Arguments.of("nextDueDate", replace(valid, "\"nextDueDate\":\"2026-08-29\"",
                         "\"nextDueDate\":false")),
                 Arguments.of("deckId", replace(valid, "\"id\":\"" + DECK_ID + "\"",
@@ -565,8 +561,10 @@ class JsonStorageTest {
 
     private void assertRejected(String json) throws IOException {
         Path path = writeDocument(json);
+        byte[] originalBytes = Files.readAllBytes(path);
 
         assertThrows(StorageException.class, () -> new JsonStorage(path).load());
+        assertArrayEquals(originalBytes, Files.readAllBytes(path));
     }
 
     private Path writeDocument(String json) throws IOException {
@@ -581,12 +579,8 @@ class JsonStorageTest {
     }
 
     private static String validInternalDocument() {
-        String flashcardProgress = "\"mastery\":1,\"attempts\":2,"
-                + "\"correctAttempts\":1,\"lastReviewedDate\":null,"
-                + "\"nextDueDate\":\"2026-08-29\"";
-        String typingProgress = "\"mastery\":2,\"attempts\":2,"
-                + "\"correctAttempts\":1,\"lastReviewedDate\":\"2026-08-29\","
-                + "\"nextDueDate\":\"2026-08-31\"";
+        String flashcardProgress = "\"mastery\":1,\"nextDueDate\":\"2026-08-29\"";
+        String typingProgress = "\"mastery\":2,\"nextDueDate\":\"2026-08-31\"";
         String card = "{\"id\":\"" + CARD_ID + "\",\"hiragana\":\"ねこ\","
                 + "\"romaji\":\"neko\",\"englishMeaning\":\"cat\","
                 + "\"progress\":{\"FLASHCARD\":{" + flashcardProgress + "},"
@@ -605,14 +599,11 @@ class JsonStorageTest {
     }
 
     private static String cardJson(String id, int mastery) {
-        return cardJson(id, mastery, 2, 1, null, "2026-08-29");
+        return cardJson(id, mastery, "2026-08-29");
     }
 
-    private static String cardJson(String id, int mastery, int attempts, int correctAttempts,
-            String lastReviewedDate, String nextDueDate) {
-        String progress = "\"mastery\":" + mastery + ",\"attempts\":" + attempts
-                + ",\"correctAttempts\":" + correctAttempts
-                + ",\"lastReviewedDate\":" + jsonStringOrNull(lastReviewedDate)
+    private static String cardJson(String id, int mastery, String nextDueDate) {
+        String progress = "\"mastery\":" + mastery
                 + ",\"nextDueDate\":" + jsonStringOrNull(nextDueDate);
         return "{\"id\":\"" + id + "\",\"hiragana\":\"ねこ\",\"romaji\":\"neko\","
                 + "\"englishMeaning\":\"cat\",\"progress\":{\"FLASHCARD\":{"
@@ -625,9 +616,6 @@ class JsonStorageTest {
 
     private static void assertProgressEquals(ModeProgress expected, ModeProgress actual) {
         assertEquals(expected.mastery(), actual.mastery());
-        assertEquals(expected.attempts(), actual.attempts());
-        assertEquals(expected.correctAttempts(), actual.correctAttempts());
-        assertEquals(expected.lastReviewedDate(), actual.lastReviewedDate());
         assertEquals(expected.nextDueDate(), actual.nextDueDate());
     }
 

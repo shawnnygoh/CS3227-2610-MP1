@@ -230,8 +230,7 @@ class KokoDataTest {
         KokoData data = new KokoData();
         VocabularyCard first = data.addVocabularyCard("ねこ", "neko", "cat", CREATION_DATE);
         VocabularyCard second = data.addVocabularyCard("いぬ", "inu", "dog", CREATION_DATE);
-        ModeProgress progress = new ModeProgress(4, 6, 5,
-                CREATION_DATE.plusDays(1), CREATION_DATE.plusDays(15));
+        ModeProgress progress = new ModeProgress(4, CREATION_DATE.plusDays(15));
         first.updateProgress(Mode.FLASHCARD, progress);
 
         assertThrows(IllegalArgumentException.class, () ->

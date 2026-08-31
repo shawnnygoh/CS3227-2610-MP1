@@ -179,8 +179,7 @@ public final class FlashcardSession {
      *
      * @param expectedCardId card ID captured when the answer was revealed.
      * @param outcome correct or incorrect outcome.
-     * @throws IllegalArgumentException if the outcome is SKIPPED or incrementing
-     *         the attempt count exceeds the supported integer range.
+     * @throws IllegalArgumentException if the outcome is SKIPPED.
      * @throws IllegalStateException if the event is stale, early, repeated, or terminal,
      *         or the queued card no longer exists.
      * @throws NullPointerException if an argument is null.

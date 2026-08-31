@@ -7,13 +7,9 @@ import java.util.Objects;
  * Immutable progress snapshot for one learning mode.
  *
  * @param mastery mastery level from zero to five, inclusive.
- * @param attempts total number of attempts.
- * @param correctAttempts number of correct attempts.
- * @param lastReviewedDate date of the latest review, or null if never reviewed.
  * @param nextDueDate date on which the mode is next due.
  */
-public record ModeProgress(int mastery, int attempts, int correctAttempts,
-        LocalDate lastReviewedDate, LocalDate nextDueDate) {
+public record ModeProgress(int mastery, LocalDate nextDueDate) {
 
     /** Lowest mastery level the domain allows. */
     public static final int MINIMUM_MASTERY = 0;
@@ -25,19 +21,12 @@ public record ModeProgress(int mastery, int attempts, int correctAttempts,
      * Creates a validated progress snapshot.
      *
      * @param mastery mastery level from zero to five, inclusive.
-     * @param attempts total number of attempts.
-     * @param correctAttempts number of correct attempts.
-     * @param lastReviewedDate date of the latest review, or null if never reviewed.
      * @param nextDueDate date on which the mode is next due.
-     * @throws IllegalArgumentException if a numeric invariant is violated.
+     * @throws IllegalArgumentException if mastery is outside zero through five.
      * @throws NullPointerException if nextDueDate is null.
      */
     public ModeProgress {
         validateMastery(mastery);
-        if (attempts < 0 || correctAttempts < 0 || correctAttempts > attempts) {
-            throw new IllegalArgumentException(
-                    "Attempts must be non-negative and correct attempts cannot exceed attempts");
-        }
         Objects.requireNonNull(nextDueDate, "Next due date cannot be null");
     }
 
@@ -49,7 +38,7 @@ public record ModeProgress(int mastery, int attempts, int correctAttempts,
      * @throws NullPointerException if creationDate is null.
      */
     public static ModeProgress forCreationDate(LocalDate creationDate) {
-        return new ModeProgress(0, 0, 0, null,
+        return new ModeProgress(0,
                 Objects.requireNonNull(creationDate, "Creation date cannot be null"));
     }
 

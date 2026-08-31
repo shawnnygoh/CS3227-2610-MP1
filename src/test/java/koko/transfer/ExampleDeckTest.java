@@ -1,7 +1,6 @@
 package koko.transfer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.nio.file.Path;
 import java.time.Clock;
@@ -73,10 +72,8 @@ class ExampleDeckTest {
         KokoData initial = new KokoData();
         VocabularyCard shared = initial.addVocabularyCard(exampleCard.hiragana(), "IE",
                 "HOUSE", IMPORT_DATE.minusDays(10));
-        ModeProgress flashcard = new ModeProgress(4, 8, 6,
-                IMPORT_DATE.minusDays(1), IMPORT_DATE.plusDays(8));
-        ModeProgress typing = new ModeProgress(2, 5, 3,
-                IMPORT_DATE.minusDays(2), IMPORT_DATE.plusDays(3));
+        ModeProgress flashcard = new ModeProgress(4, IMPORT_DATE.plusDays(8));
+        ModeProgress typing = new ModeProgress(2, IMPORT_DATE.plusDays(3));
         shared.updateProgress(Mode.FLASHCARD, flashcard);
         shared.updateProgress(Mode.TYPING, typing);
         Deck existing = initial.createDeck("Existing deck");
@@ -123,18 +120,12 @@ class ExampleDeckTest {
         for (Mode mode : Mode.values()) {
             ModeProgress progress = card.progressFor(mode);
             assertEquals(0, progress.mastery());
-            assertEquals(0, progress.attempts());
-            assertEquals(0, progress.correctAttempts());
-            assertNull(progress.lastReviewedDate());
             assertEquals(IMPORT_DATE, progress.nextDueDate());
         }
     }
 
     private static void assertProgressEquals(ModeProgress expected, ModeProgress actual) {
         assertEquals(expected.mastery(), actual.mastery());
-        assertEquals(expected.attempts(), actual.attempts());
-        assertEquals(expected.correctAttempts(), actual.correctAttempts());
-        assertEquals(expected.lastReviewedDate(), actual.lastReviewedDate());
         assertEquals(expected.nextDueDate(), actual.nextDueDate());
     }
 }

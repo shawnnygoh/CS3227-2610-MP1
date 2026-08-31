@@ -201,9 +201,7 @@ public final class JsonStorage implements Storage {
     }
 
     private static JsonProgress toProgress(ModeProgress progress) {
-        return new JsonProgress(progress.mastery(), progress.attempts(),
-                progress.correctAttempts(), dateToString(progress.lastReviewedDate()),
-                dateToString(progress.nextDueDate()));
+        return new JsonProgress(progress.mastery(), progress.nextDueDate().toString());
     }
 
     private static KokoData restore(JsonDocument document) {
@@ -264,9 +262,6 @@ public final class JsonStorage implements Storage {
             return;
         }
         requireInteger(progress, "mastery");
-        requireInteger(progress, "attempts");
-        requireInteger(progress, "correctAttempts");
-        requireString(progress, "lastReviewedDate");
         requireString(progress, "nextDueDate");
     }
 
@@ -388,13 +383,10 @@ public final class JsonStorage implements Storage {
     }
 
     private static ModeProgress restoreProgress(JsonProgress progress) {
-        if (progress == null || progress.mastery() == null || progress.attempts() == null
-                || progress.correctAttempts() == null || progress.nextDueDate() == null) {
+        if (progress == null || progress.mastery() == null || progress.nextDueDate() == null) {
             throw new IllegalArgumentException("Progress is missing a required field");
         }
-        return new ModeProgress(progress.mastery(), progress.attempts(),
-                progress.correctAttempts(), parseDate(progress.lastReviewedDate()),
-                parseDate(progress.nextDueDate()));
+        return new ModeProgress(progress.mastery(), parseDate(progress.nextDueDate()));
     }
 
     private static UUID parseUuid(String value, String fieldName) {
@@ -413,18 +405,11 @@ public final class JsonStorage implements Storage {
     }
 
     private static LocalDate parseDate(String value) {
-        if (value == null) {
-            return null;
-        }
         try {
             return LocalDate.parse(value);
         } catch (DateTimeParseException exception) {
             throw new IllegalArgumentException("Invalid date", exception);
         }
-    }
-
-    private static String dateToString(LocalDate date) {
-        return date == null ? null : date.toString();
     }
 
     private record JsonDocument(Integer schemaVersion, List<JsonCard> cards,
@@ -435,8 +420,7 @@ public final class JsonStorage implements Storage {
             Map<String, JsonProgress> progress) {
     }
 
-    private record JsonProgress(Integer mastery, Integer attempts, Integer correctAttempts,
-            String lastReviewedDate, String nextDueDate) {
+    private record JsonProgress(Integer mastery, String nextDueDate) {
     }
 
     private record JsonDeck(String id, String name, List<String> cardIds) {

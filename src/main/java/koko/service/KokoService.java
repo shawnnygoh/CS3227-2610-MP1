@@ -358,8 +358,7 @@ public final class KokoService {
      *
      * @param cardId global card whose flashcard progress is reviewed.
      * @param outcome correct or incorrect review result.
-     * @throws IllegalArgumentException if the card is unknown, outcome is skipped,
-     *         or incrementing the attempt count exceeds the supported integer range.
+     * @throws IllegalArgumentException if the card is unknown or outcome is skipped.
      * @throws NullPointerException if cardId or outcome is null.
      * @throws java.time.DateTimeException if the next due date exceeds the range supported by {@link LocalDate}.
      * @throws StorageException if persistence fails.
@@ -384,8 +383,7 @@ public final class KokoService {
      *
      * @param cardId global card whose typing progress is reviewed.
      * @param outcome correct, incorrect, or skipped review result.
-     * @throws IllegalArgumentException if the card is unknown or incrementing the attempt
-     *         count exceeds the supported integer range.
+     * @throws IllegalArgumentException if the card is unknown.
      * @throws NullPointerException if cardId or outcome is null.
      * @throws java.time.DateTimeException if the next due date exceeds the range supported by {@link LocalDate}.
      * @throws StorageException if persistence fails.

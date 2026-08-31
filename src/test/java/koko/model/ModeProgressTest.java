@@ -3,7 +3,6 @@ package koko.model;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -23,9 +22,6 @@ class ModeProgressTest {
         ModeProgress progress = ModeProgress.forCreationDate(CREATION_DATE);
 
         assertEquals(0, progress.mastery());
-        assertEquals(0, progress.attempts());
-        assertEquals(0, progress.correctAttempts());
-        assertNull(progress.lastReviewedDate());
         assertEquals(CREATION_DATE, progress.nextDueDate());
         assertFalse(progress.isDueOn(CREATION_DATE.minusDays(1)));
         assertTrue(progress.isDueOn(CREATION_DATE));
@@ -33,21 +29,19 @@ class ModeProgressTest {
 
     @Test
     void masteryBoundariesAreAcceptedAndInvalidValuesAreRejected() {
-        assertDoesNotThrow(() -> new ModeProgress(0, 0, 0, null, CREATION_DATE));
-        assertDoesNotThrow(() -> new ModeProgress(5, 0, 0, null, CREATION_DATE));
+        assertDoesNotThrow(() -> new ModeProgress(0, CREATION_DATE));
+        assertDoesNotThrow(() -> new ModeProgress(5, CREATION_DATE));
         assertThrows(IllegalArgumentException.class, () ->
-                new ModeProgress(-1, 0, 0, null, CREATION_DATE));
+                new ModeProgress(-1, CREATION_DATE));
         assertThrows(IllegalArgumentException.class, () ->
-                new ModeProgress(6, 0, 0, null, CREATION_DATE));
-        assertThrows(IllegalArgumentException.class, () ->
-                new ModeProgress(0, 1, 2, null, CREATION_DATE));
+                new ModeProgress(6, CREATION_DATE));
     }
 
     @Test
     void progressRejectsMissingCreationDueDate() {
         assertThrows(NullPointerException.class, () -> ModeProgress.forCreationDate(null));
         assertThrows(NullPointerException.class, () ->
-                new ModeProgress(0, 0, 0, null, null));
+                new ModeProgress(0, null));
         assertThrows(NullPointerException.class, () ->
                 ModeProgress.forCreationDate(CREATION_DATE).isDueOn(null));
     }

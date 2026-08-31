@@ -18,21 +18,19 @@ public final class MasteryScheduler implements ReviewScheduler {
     /**
      * Computes progress after one review outcome.
      *
-     * <p>Every outcome adds one attempt; only a correct answer adds one correct
-     * attempt. Correct answers increase mastery, capped at five, and schedule
+     * <p>Correct answers increase mastery, capped at five, and schedule
      * 1, 3, 7, 14, or 30 days for resulting mastery levels one through five.
      * Incorrect answers decrease mastery, floored at zero, while skipped
      * answers preserve mastery. Both are due the following day.
      *
-     * <p>All dates are based on the actual review date, which becomes the last
-     * reviewed date. Overdue progress receives no automatic mastery decay.
+     * <p>All dates are based on the actual review date. Overdue progress receives
+     * no automatic mastery decay.
      *
      * @param progress current progress for one learning mode.
      * @param outcome result of the review.
      * @param reviewDate actual date on which the review occurred.
      * @return a new immutable progress object.
      * @throws NullPointerException if an argument is null.
-     * @throws IllegalArgumentException if the attempt count is already at {@link Integer#MAX_VALUE}.
      * @throws java.time.DateTimeException if the next due date exceeds the range supported by {@link LocalDate}.
      */
     @Override
@@ -42,17 +40,9 @@ public final class MasteryScheduler implements ReviewScheduler {
         Objects.requireNonNull(outcome, "Review outcome cannot be null");
         Objects.requireNonNull(reviewDate, "Review date cannot be null");
 
-        if (progress.attempts() == Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("Attempt count cannot exceed " + Integer.MAX_VALUE);
-        }
-
         int mastery = computeMasteryAfter(progress.mastery(), outcome);
-        int attempts = progress.attempts() + 1;
-        // ModeProgress ensures correctAttempts <= attempts, so this increment is also safe.
-        int correctAttempts = progress.correctAttempts()
-                + (outcome == ReviewOutcome.CORRECT ? 1 : 0);
         LocalDate nextDueDate = reviewDate.plusDays(computeDaysUntilNextReview(mastery, outcome));
-        return new ModeProgress(mastery, attempts, correctAttempts, reviewDate, nextDueDate);
+        return new ModeProgress(mastery, nextDueDate);
     }
 
     /**

@@ -11,10 +11,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -377,10 +379,8 @@ class KokoServiceTest {
     void editingPreservesIdentityAndBothProgressRecords() throws StorageException {
         KokoService service = new KokoService(new FakeStorage(), FIXED_CLOCK);
         VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
-        ModeProgress flashcard = new ModeProgress(3, 4, 3,
-                CREATION_DATE.minusDays(1), CREATION_DATE.plusDays(5));
-        ModeProgress typing = new ModeProgress(2, 3, 2,
-                CREATION_DATE.minusDays(2), CREATION_DATE.plusDays(3));
+        ModeProgress flashcard = new ModeProgress(3, CREATION_DATE.plusDays(5));
+        ModeProgress typing = new ModeProgress(2, CREATION_DATE.plusDays(3));
         card.updateProgress(Mode.FLASHCARD, flashcard);
         card.updateProgress(Mode.TYPING, typing);
 
@@ -539,8 +539,7 @@ class KokoServiceTest {
         FakeStorage storage = new FakeStorage();
         KokoService service = new KokoService(storage, FIXED_CLOCK);
         VocabularyCard card = service.addVocabularyCard("こーひー", "kōhī", "coffee");
-        ModeProgress progress = new ModeProgress(3, 4, 3,
-                CREATION_DATE.minusDays(1), CREATION_DATE.plusDays(5));
+        ModeProgress progress = new ModeProgress(3, CREATION_DATE.plusDays(5));
         card.updateProgress(Mode.FLASHCARD, progress);
         Deck deck = service.createDeck("Cafe");
         service.addCardToDeck(deck.id(), card.id());
@@ -612,10 +611,9 @@ class KokoServiceTest {
             KokoService service = new KokoService(storage, FIXED_CLOCK);
             VocabularyCard card = service.addVocabularyCard("ねこ", "neko" + currentMastery,
                     "cat" + currentMastery);
-            ModeProgress typing = new ModeProgress(2, 3, 1,
-                    CREATION_DATE.minusDays(2), CREATION_DATE.plusDays(4));
-            card.updateProgress(Mode.FLASHCARD, new ModeProgress(currentMastery, 7, 5,
-                    CREATION_DATE.minusDays(1), CREATION_DATE.minusDays(2)));
+            ModeProgress typing = new ModeProgress(2, CREATION_DATE.plusDays(4));
+            card.updateProgress(Mode.FLASHCARD,
+                    new ModeProgress(currentMastery, CREATION_DATE.minusDays(2)));
             card.updateProgress(Mode.TYPING, typing);
 
             service.recordFlashcardOutcome(card.id(), ReviewOutcome.CORRECT);
@@ -623,9 +621,6 @@ class KokoServiceTest {
             VocabularyCard updated = service.data().findVocabularyCard(card.id()).orElseThrow();
             ModeProgress flashcard = updated.progressFor(Mode.FLASHCARD);
             assertEquals(currentMastery == 5 ? 5 : currentMastery + 1, flashcard.mastery());
-            assertEquals(8, flashcard.attempts());
-            assertEquals(6, flashcard.correctAttempts());
-            assertEquals(CREATION_DATE, flashcard.lastReviewedDate());
             assertEquals(CREATION_DATE.plusDays(expectedIntervals[currentMastery]),
                     flashcard.nextDueDate());
             assertProgressEquals(typing, updated.progressFor(Mode.TYPING));
@@ -639,12 +634,11 @@ class KokoServiceTest {
     }
 
     @Test
-    void incorrectOutcomeLowersMasteryWithoutChangingCorrectAttempts() throws StorageException {
+    void incorrectOutcomeLowersMasteryAndIsDueTheFollowingDay() throws StorageException {
         FakeStorage storage = new FakeStorage();
         KokoService service = new KokoService(storage, FIXED_CLOCK);
         VocabularyCard card = service.addVocabularyCard("いぬ", "inu", "dog");
-        ModeProgress original = new ModeProgress(4, 9, 6,
-                CREATION_DATE.minusDays(3), CREATION_DATE.plusDays(20));
+        ModeProgress original = new ModeProgress(4, CREATION_DATE.plusDays(20));
         card.updateProgress(Mode.FLASHCARD, original);
 
         service.recordFlashcardOutcome(card.id(), ReviewOutcome.INCORRECT);
@@ -652,9 +646,6 @@ class KokoServiceTest {
         ModeProgress updated = service.data().findVocabularyCard(card.id()).orElseThrow()
                 .progressFor(Mode.FLASHCARD);
         assertEquals(3, updated.mastery());
-        assertEquals(10, updated.attempts());
-        assertEquals(6, updated.correctAttempts());
-        assertEquals(CREATION_DATE, updated.lastReviewedDate());
         assertEquals(CREATION_DATE.plusDays(1), updated.nextDueDate());
     }
 
@@ -663,10 +654,8 @@ class KokoServiceTest {
         FakeStorage storage = new FakeStorage();
         KokoService service = new KokoService(storage, FIXED_CLOCK);
         VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
-        ModeProgress flashcard = new ModeProgress(4, 7, 5,
-                CREATION_DATE.minusDays(1), CREATION_DATE.plusDays(5));
-        ModeProgress typing = new ModeProgress(2, 3, 1,
-                CREATION_DATE.minusDays(2), CREATION_DATE.plusDays(4));
+        ModeProgress flashcard = new ModeProgress(4, CREATION_DATE.plusDays(5));
+        ModeProgress typing = new ModeProgress(2, CREATION_DATE.plusDays(4));
         card.updateProgress(Mode.FLASHCARD, flashcard);
         card.updateProgress(Mode.TYPING, typing);
 
@@ -674,8 +663,8 @@ class KokoServiceTest {
 
         VocabularyCard updated = service.data().findVocabularyCard(card.id()).orElseThrow();
         assertProgressEquals(flashcard, updated.progressFor(Mode.FLASHCARD));
-        assertProgressEquals(new ModeProgress(2, 4, 1, CREATION_DATE,
-                CREATION_DATE.plusDays(1)), updated.progressFor(Mode.TYPING));
+        assertProgressEquals(new ModeProgress(2, CREATION_DATE.plusDays(1)),
+                updated.progressFor(Mode.TYPING));
         assertEquals(card.id(), updated.id());
         assertEquals("ねこ", updated.hiragana());
         assertEquals("neko", updated.romaji());
@@ -713,11 +702,9 @@ class KokoServiceTest {
         VocabularyCard overdue = service.addVocabularyCard("あめ", "ame", "rain");
         VocabularyCard nonDue = service.addVocabularyCard("ゆき", "yuki", "snow");
         service.data().findVocabularyCard(overdue.id()).orElseThrow().updateProgress(
-                Mode.FLASHCARD, new ModeProgress(1, 1, 1,
-                CREATION_DATE.minusDays(5), CREATION_DATE.minusDays(1)));
+                Mode.FLASHCARD, new ModeProgress(1, CREATION_DATE.minusDays(1)));
         service.data().findVocabularyCard(nonDue.id()).orElseThrow().updateProgress(
-                Mode.FLASHCARD, new ModeProgress(1, 1, 1,
-                CREATION_DATE.minusDays(5), CREATION_DATE.plusDays(20)));
+                Mode.FLASHCARD, new ModeProgress(1, CREATION_DATE.plusDays(20)));
 
         // Advance beyond creation, then cross midnight in Singapore without sleeping.
         currentInstant.set(Instant.parse("2026-08-31T15:59:59Z"));
@@ -729,9 +716,7 @@ class KokoServiceTest {
                 .progressFor(Mode.FLASHCARD);
         ModeProgress nonDueProgress = service.data().findVocabularyCard(nonDue.id()).orElseThrow()
                 .progressFor(Mode.FLASHCARD);
-        assertEquals(LocalDate.of(2026, 8, 31), overdueProgress.lastReviewedDate());
         assertEquals(LocalDate.of(2026, 9, 1), overdueProgress.nextDueDate());
-        assertEquals(LocalDate.of(2026, 9, 1), nonDueProgress.lastReviewedDate());
         assertEquals(LocalDate.of(2026, 9, 4), nonDueProgress.nextDueDate());
     }
 
@@ -752,12 +737,12 @@ class KokoServiceTest {
         service.recordFlashcardOutcome(unassigned.id(), ReviewOutcome.CORRECT);
         service.recordFlashcardOutcome(shared.id(), ReviewOutcome.INCORRECT);
 
-        assertEquals(1, service.data().findVocabularyCard(unassigned.id()).orElseThrow()
-                .progressFor(Mode.FLASHCARD).attempts());
-        assertEquals(1, service.data().findVocabularyCard(shared.id()).orElseThrow()
-                .progressFor(Mode.FLASHCARD).attempts());
-        assertEquals(0, service.data().findVocabularyCard(other.id()).orElseThrow()
-                .progressFor(Mode.FLASHCARD).attempts());
+        assertProgressEquals(new ModeProgress(1, CREATION_DATE.plusDays(1)),
+                currentCard(service, unassigned.id()).progressFor(Mode.FLASHCARD));
+        assertProgressEquals(new ModeProgress(0, CREATION_DATE.plusDays(1)),
+                currentCard(service, shared.id()).progressFor(Mode.FLASHCARD));
+        assertProgressEquals(ModeProgress.forCreationDate(CREATION_DATE),
+                currentCard(service, other.id()).progressFor(Mode.FLASHCARD));
         assertEquals(List.of(other.id(), shared.id()), service.data().findDeckById(first.id())
                 .orElseThrow().cardIds());
         assertEquals(List.of(shared.id(), other.id()), service.data().findDeckById(second.id())
@@ -790,20 +775,20 @@ class KokoServiceTest {
     @Test
     void schedulerFailureLeavesServiceDataAndExposedReferencesUnchanged() throws StorageException {
         FakeStorage storage = new FakeStorage();
-        KokoService service = new KokoService(storage, FIXED_CLOCK);
+        Clock endOfSupportedDates = Clock.fixed(
+                LocalDate.MAX.atStartOfDay(ZoneOffset.UTC).toInstant(), ZoneOffset.UTC);
+        KokoService service = new KokoService(storage, endOfSupportedDates);
         VocabularyCard card = service.addVocabularyCard("くも", "kumo", "cloud");
-        ModeProgress original = new ModeProgress(0, Integer.MAX_VALUE, 0,
-                CREATION_DATE.minusDays(1), CREATION_DATE);
+        ModeProgress original = new ModeProgress(0, CREATION_DATE);
         card.updateProgress(Mode.FLASHCARD, original);
         KokoData originalData = service.data();
 
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(DateTimeException.class, () ->
                 service.recordFlashcardOutcome(card.id(), ReviewOutcome.INCORRECT));
 
         assertSame(originalData, service.data());
         assertSame(card, service.data().findVocabularyCard(card.id()).orElseThrow());
         assertSame(original, card.progressFor(Mode.FLASHCARD));
-        assertEquals(Integer.MAX_VALUE, original.attempts());
         assertEquals(1, storage.saveInvocations);
     }
 
@@ -851,9 +836,7 @@ class KokoServiceTest {
 
         ModeProgress updated = service.data().findVocabularyCard(card.id()).orElseThrow()
                 .progressFor(Mode.FLASHCARD);
-        assertEquals(1, updated.mastery());
-        assertEquals(1, updated.attempts());
-        assertEquals(1, updated.correctAttempts());
+        assertProgressEquals(new ModeProgress(1, CREATION_DATE.plusDays(1)), updated);
         assertEquals(3, storage.saveInvocations);
         assertEquals(2, storage.successfulSaveCount);
     }
@@ -865,7 +848,7 @@ class KokoServiceTest {
         // No mastery policy produces a 99-day interval, so this result can only
         // come from the injected scheduler.
         RecordingScheduler scheduler = new RecordingScheduler(
-                new ModeProgress(5, 1, 1, CREATION_DATE, CREATION_DATE.plusDays(99)));
+                new ModeProgress(5, CREATION_DATE.plusDays(99)));
         KokoService service = new KokoService(storage, FIXED_CLOCK, scheduler);
         VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
         ModeProgress beforeReview = card.progressFor(Mode.FLASHCARD);
@@ -887,7 +870,7 @@ class KokoServiceTest {
     @Test
     void typingOutcomesAlsoUseTheSuppliedScheduler() throws StorageException {
         RecordingScheduler scheduler = new RecordingScheduler(
-                new ModeProgress(4, 2, 1, CREATION_DATE, CREATION_DATE.plusDays(77)));
+                new ModeProgress(4, CREATION_DATE.plusDays(77)));
         KokoService service = new KokoService(new FakeStorage(), FIXED_CLOCK, scheduler);
         VocabularyCard card = service.addVocabularyCard("いぬ", "inu", "dog");
 
@@ -1053,9 +1036,6 @@ class KokoServiceTest {
 
     private static void assertProgressEquals(ModeProgress expected, ModeProgress actual) {
         assertEquals(expected.mastery(), actual.mastery());
-        assertEquals(expected.attempts(), actual.attempts());
-        assertEquals(expected.correctAttempts(), actual.correctAttempts());
-        assertEquals(expected.lastReviewedDate(), actual.lastReviewedDate());
         assertEquals(expected.nextDueDate(), actual.nextDueDate());
     }
 }

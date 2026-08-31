@@ -2,11 +2,11 @@ package koko.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.DateTimeException;
 import java.time.LocalDate;
 
 import org.junit.jupiter.api.Test;
@@ -33,15 +33,12 @@ class MasterySchedulerTest {
         int[] expectedIntervals = {1, 3, 7, 14, 30, 30};
 
         for (int currentMastery = 0; currentMastery <= 5; currentMastery++) {
-            ModeProgress original = createProgressAt(currentMastery, 10, 6);
+            ModeProgress original = new ModeProgress(currentMastery, REVIEW_DATE);
 
             ModeProgress scheduled = scheduler.schedule(original, ReviewOutcome.CORRECT,
                     REVIEW_DATE);
 
             assertEquals(expectedMasteries[currentMastery], scheduled.mastery());
-            assertEquals(11, scheduled.attempts());
-            assertEquals(7, scheduled.correctAttempts());
-            assertEquals(REVIEW_DATE, scheduled.lastReviewedDate());
             assertEquals(REVIEW_DATE.plusDays(expectedIntervals[currentMastery]),
                     scheduled.nextDueDate());
         }
@@ -52,15 +49,12 @@ class MasterySchedulerTest {
         int[] expectedMasteries = {0, 0, 1, 2, 3, 4};
 
         for (int currentMastery = 0; currentMastery <= 5; currentMastery++) {
-            ModeProgress original = createProgressAt(currentMastery, 10, 6);
+            ModeProgress original = new ModeProgress(currentMastery, REVIEW_DATE);
 
             ModeProgress scheduled = scheduler.schedule(original, ReviewOutcome.INCORRECT,
                     REVIEW_DATE);
 
             assertEquals(expectedMasteries[currentMastery], scheduled.mastery());
-            assertEquals(11, scheduled.attempts());
-            assertEquals(6, scheduled.correctAttempts());
-            assertEquals(REVIEW_DATE, scheduled.lastReviewedDate());
             assertEquals(REVIEW_DATE.plusDays(1), scheduled.nextDueDate());
         }
     }
@@ -68,49 +62,38 @@ class MasterySchedulerTest {
     @Test
     void skippedReviewsPreserveMasteryAndScheduleTheFollowingDay() {
         for (int currentMastery = 0; currentMastery <= 5; currentMastery++) {
-            ModeProgress original = createProgressAt(currentMastery, 10, 6);
+            ModeProgress original = new ModeProgress(currentMastery, REVIEW_DATE);
 
             ModeProgress scheduled = scheduler.schedule(original, ReviewOutcome.SKIPPED,
                     REVIEW_DATE);
 
             assertEquals(currentMastery, scheduled.mastery());
-            assertEquals(11, scheduled.attempts());
-            assertEquals(6, scheduled.correctAttempts());
-            assertEquals(REVIEW_DATE, scheduled.lastReviewedDate());
             assertEquals(REVIEW_DATE.plusDays(1), scheduled.nextDueDate());
         }
     }
 
     @ParameterizedTest
     @CsvSource({
-        "CORRECT, 1, 1",
-        "INCORRECT, 0, 0",
-        "SKIPPED, 0, 0"
+        "CORRECT, 1",
+        "INCORRECT, 0",
+        "SKIPPED, 0"
     })
-    void firstReviewUpdatesFreshProgress(ReviewOutcome outcome, int expectedMastery,
-            int expectedCorrectAttempts) {
+    void firstReviewUpdatesFreshProgress(ReviewOutcome outcome, int expectedMastery) {
         ModeProgress original = ModeProgress.forCreationDate(REVIEW_DATE);
 
         ModeProgress scheduled = scheduler.schedule(original, outcome, REVIEW_DATE);
 
         assertEquals(expectedMastery, scheduled.mastery());
-        assertEquals(1, scheduled.attempts());
-        assertEquals(expectedCorrectAttempts, scheduled.correctAttempts());
-        assertEquals(REVIEW_DATE, scheduled.lastReviewedDate());
         assertEquals(REVIEW_DATE.plusDays(1), scheduled.nextDueDate());
         assertNotSame(original, scheduled);
-        assertEquals(0, original.attempts());
-        assertEquals(0, original.correctAttempts());
-        assertNull(original.lastReviewedDate());
+        assertEquals(new ModeProgress(0, REVIEW_DATE), original);
     }
 
     @Test
-    void consecutiveReviewsAccumulateCountersAndUseThePreviousSnapshot() {
+    void consecutiveReviewsUseThePreviousMasteryAndCurrentReviewDate() {
         ReviewOutcome[] outcomes = {ReviewOutcome.CORRECT, ReviewOutcome.CORRECT,
             ReviewOutcome.INCORRECT, ReviewOutcome.SKIPPED, ReviewOutcome.CORRECT};
         int[] expectedMasteries = {1, 2, 1, 1, 2};
-        int[] expectedAttempts = {1, 2, 3, 4, 5};
-        int[] expectedCorrectAttempts = {1, 2, 2, 2, 3};
         int[] expectedIntervals = {1, 3, 1, 1, 3};
         ModeProgress progress = ModeProgress.forCreationDate(REVIEW_DATE);
 
@@ -119,38 +102,30 @@ class MasterySchedulerTest {
             progress = scheduler.schedule(progress, outcomes[reviewIndex], reviewDate);
 
             assertEquals(expectedMasteries[reviewIndex], progress.mastery());
-            assertEquals(expectedAttempts[reviewIndex], progress.attempts());
-            assertEquals(expectedCorrectAttempts[reviewIndex], progress.correctAttempts());
-            assertEquals(reviewDate, progress.lastReviewedDate());
             assertEquals(reviewDate.plusDays(expectedIntervals[reviewIndex]), progress.nextDueDate());
         }
     }
 
     @ParameterizedTest
     @CsvSource({
-        "CORRECT, 5, 6, 30",
-        "INCORRECT, 3, 5, 1",
-        "SKIPPED, 4, 5, 1"
+        "CORRECT, 5, 30",
+        "INCORRECT, 3, 1",
+        "SKIPPED, 4, 1"
     })
     void overdueReviewsUseActualReviewDateWithoutMasteryDecay(ReviewOutcome outcome,
-            int expectedMastery, int expectedCorrectAttempts, int expectedInterval) {
+            int expectedMastery, int expectedInterval) {
         LocalDate reviewDate = LocalDate.of(2026, 1, 10);
-        ModeProgress overdue = new ModeProgress(4, 8, 5,
-                reviewDate.minusDays(60), reviewDate.minusDays(30));
+        ModeProgress overdue = new ModeProgress(4, reviewDate.minusDays(30));
 
         ModeProgress scheduled = scheduler.schedule(overdue, outcome, reviewDate);
 
         assertEquals(expectedMastery, scheduled.mastery());
-        assertEquals(9, scheduled.attempts());
-        assertEquals(expectedCorrectAttempts, scheduled.correctAttempts());
-        assertEquals(reviewDate, scheduled.lastReviewedDate());
         assertEquals(reviewDate.plusDays(expectedInterval), scheduled.nextDueDate());
     }
 
     @Test
     void dueDateIsInclusiveAtTheBoundaryAndDoesNotChangeProgress() {
-        ModeProgress due = new ModeProgress(2, 3, 2,
-                REVIEW_DATE.minusDays(3), REVIEW_DATE);
+        ModeProgress due = new ModeProgress(2, REVIEW_DATE);
 
         assertTrue(due.isDueOn(REVIEW_DATE));
         assertTrue(due.isDueOn(REVIEW_DATE.plusDays(1)));
@@ -159,12 +134,12 @@ class MasterySchedulerTest {
 
     @Test
     void schedulingHandlesMonthYearAndLeapDayTransitions() {
-        ModeProgress masteryFour = createProgressAt(4, 0, 0);
+        ModeProgress masteryFour = new ModeProgress(4, REVIEW_DATE);
         ModeProgress endOfYear = scheduler.schedule(masteryFour, ReviewOutcome.CORRECT,
                 LocalDate.of(2026, 12, 15));
-        ModeProgress leapDay = scheduler.schedule(createProgressAt(0, 0, 0), ReviewOutcome.CORRECT,
+        ModeProgress leapDay = scheduler.schedule(new ModeProgress(0, REVIEW_DATE), ReviewOutcome.CORRECT,
                 LocalDate.of(2028, 2, 28));
-        ModeProgress afterLeapDay = scheduler.schedule(createProgressAt(0, 0, 0),
+        ModeProgress afterLeapDay = scheduler.schedule(new ModeProgress(0, REVIEW_DATE),
                 ReviewOutcome.INCORRECT, LocalDate.of(2028, 2, 29));
 
         assertEquals(LocalDate.of(2027, 1, 14), endOfYear.nextDueDate());
@@ -186,53 +161,24 @@ class MasterySchedulerTest {
 
     @ParameterizedTest
     @EnumSource(ReviewOutcome.class)
-    void attemptLimitIsRejectedWithAnInformativeMessage(ReviewOutcome outcome) {
-        ModeProgress original = createProgressAt(3, Integer.MAX_VALUE, Integer.MAX_VALUE);
+    void dueDateOverflowIsRejectedWithoutChangingProgress(ReviewOutcome outcome) {
+        ModeProgress original = new ModeProgress(3, REVIEW_DATE);
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                scheduler.schedule(original, outcome, REVIEW_DATE));
+        assertThrows(DateTimeException.class, () ->
+                scheduler.schedule(original, outcome, LocalDate.MAX));
 
-        assertTrue(exception.getMessage().contains("Attempt count cannot exceed"));
-        assertTrue(exception.getMessage().contains(Integer.toString(Integer.MAX_VALUE)));
-        assertEquals(3, original.mastery());
-        assertEquals(Integer.MAX_VALUE, original.attempts());
-        assertEquals(Integer.MAX_VALUE, original.correctAttempts());
-        assertEquals(REVIEW_DATE.minusDays(1), original.lastReviewedDate());
-        assertEquals(REVIEW_DATE, original.nextDueDate());
-    }
-
-    @ParameterizedTest
-    @EnumSource(ReviewOutcome.class)
-    void oneAttemptBelowTheLimitCanAdvanceToTheLimit(ReviewOutcome outcome) {
-        ModeProgress original = createProgressAt(3, Integer.MAX_VALUE - 1, Integer.MAX_VALUE - 1);
-
-        ModeProgress scheduled = scheduler.schedule(original, outcome, REVIEW_DATE);
-
-        assertEquals(Integer.MAX_VALUE, scheduled.attempts());
-        assertEquals(outcome == ReviewOutcome.CORRECT ? Integer.MAX_VALUE : Integer.MAX_VALUE - 1,
-                scheduled.correctAttempts());
-        assertEquals(REVIEW_DATE, scheduled.lastReviewedDate());
-        assertNotSame(original, scheduled);
-        assertEquals(3, original.mastery());
-        assertEquals(Integer.MAX_VALUE - 1, original.attempts());
-        assertEquals(Integer.MAX_VALUE - 1, original.correctAttempts());
-        assertEquals(REVIEW_DATE.minusDays(1), original.lastReviewedDate());
-        assertEquals(REVIEW_DATE, original.nextDueDate());
+        assertEquals(new ModeProgress(3, REVIEW_DATE), original);
     }
 
     @ParameterizedTest
     @EnumSource(ReviewOutcome.class)
     void schedulingDoesNotMutateTheInputProgress(ReviewOutcome outcome) {
-        ModeProgress original = new ModeProgress(3, 4, 2,
-                REVIEW_DATE.minusDays(2), REVIEW_DATE.minusDays(1));
+        ModeProgress original = new ModeProgress(3, REVIEW_DATE.minusDays(1));
 
         ModeProgress scheduled = scheduler.schedule(original, outcome, REVIEW_DATE);
 
         assertNotSame(original, scheduled);
         assertEquals(3, original.mastery());
-        assertEquals(4, original.attempts());
-        assertEquals(2, original.correctAttempts());
-        assertEquals(REVIEW_DATE.minusDays(2), original.lastReviewedDate());
         assertEquals(REVIEW_DATE.minusDays(1), original.nextDueDate());
     }
 
@@ -248,13 +194,6 @@ class MasterySchedulerTest {
         assertSame(flashcardBefore, card.progressFor(Mode.FLASHCARD));
         assertSame(typingBefore, card.progressFor(Mode.TYPING));
         assertEquals(0, card.progressFor(Mode.TYPING).mastery());
-        assertEquals(0, card.progressFor(Mode.TYPING).attempts());
         assertEquals(1, scheduledFlashcard.mastery());
-        assertNull(typingBefore.lastReviewedDate());
-    }
-
-    private static ModeProgress createProgressAt(int mastery, int attempts, int correctAttempts) {
-        return new ModeProgress(mastery, attempts, correctAttempts,
-                REVIEW_DATE.minusDays(1), REVIEW_DATE);
     }
 }

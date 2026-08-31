@@ -2,7 +2,6 @@ package koko.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -108,7 +107,7 @@ class VocabularyCardTest {
     @Test
     void cardHasFreshProgressForEachMode() {
         VocabularyCard card = new VocabularyCard("ねこ", "neko", "cat", CREATION_DATE);
-        ModeProgress expected = new ModeProgress(0, 0, 0, null, CREATION_DATE);
+        ModeProgress expected = new ModeProgress(0, CREATION_DATE);
 
         for (Mode mode : Mode.values()) {
             assertEquals(expected, card.progressFor(mode));
@@ -118,11 +117,10 @@ class VocabularyCardTest {
     @ParameterizedTest
     @EnumSource(Mode.class)
     void cardProgressUpdatesDoNotAffectOtherModeWithSharedInitialProgress(Mode updatedMode) {
-        ModeProgress initial = new ModeProgress(0, 0, 0, null, CREATION_DATE);
+        ModeProgress initial = new ModeProgress(0, CREATION_DATE);
         VocabularyCard card = VocabularyCard.restore(UUID.randomUUID(), "ねこ", "neko", "cat",
                 initial, initial);
-        ModeProgress updated = new ModeProgress(2, 3, 2,
-                CREATION_DATE.plusDays(1), CREATION_DATE.plusDays(4));
+        ModeProgress updated = new ModeProgress(2, CREATION_DATE.plusDays(4));
 
         card.updateProgress(updatedMode, updated);
 
@@ -134,10 +132,8 @@ class VocabularyCardTest {
     @Test
     void editingPreservesIdentityAndBothProgressRecords() {
         VocabularyCard card = new VocabularyCard("ねこ", "neko", "cat", CREATION_DATE);
-        ModeProgress flashcard = new ModeProgress(3, 4, 3,
-                CREATION_DATE.plusDays(1), CREATION_DATE.plusDays(8));
-        ModeProgress typing = new ModeProgress(1, 2, 1,
-                CREATION_DATE.plusDays(2), CREATION_DATE.plusDays(3));
+        ModeProgress flashcard = new ModeProgress(3, CREATION_DATE.plusDays(8));
+        ModeProgress typing = new ModeProgress(1, CREATION_DATE.plusDays(3));
         card.updateProgress(Mode.FLASHCARD, flashcard);
         card.updateProgress(Mode.TYPING, typing);
         var originalId = card.id();
@@ -172,7 +168,6 @@ class VocabularyCardTest {
                 card.progressFor(Mode.FLASHCARD)));
         assertThrows(NullPointerException.class, () -> card.updateProgress(Mode.FLASHCARD, null));
         assertThrows(NullPointerException.class, () -> card.progressFor(null));
-        assertNull(card.progressFor(Mode.FLASHCARD).lastReviewedDate());
     }
 
     @Test

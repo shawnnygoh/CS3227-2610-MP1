@@ -13,7 +13,7 @@
             <VBox spacing="8" minWidth="0">
                 <Label text="Vocabulary and decks" styleClass="subsection-title" />
                 <Label wrapText="true" minHeight="-Infinity"
-                       text="Card fields must be single-line text. Surrounding whitespace is trimmed, but embedded tabs, line breaks, and control characters are rejected. If an older saved file contains invalid text, Koko leaves it untouched: correct or restore the file, then restart." />
+                       text="Card fields must be single-line text. Surrounding whitespace is trimmed, but embedded tabs, line breaks, and control characters are rejected. If a saved file contains invalid text, Koko leaves it untouched: correct or restore the file, then restart." />
                 <Label wrapText="true" minHeight="-Infinity"
                        text="Add and edit words in Global vocabulary. Select a deck to see its cards, then use Add existing card to add a word from your library." />
                 <Label wrapText="true" minHeight="-Infinity"
@@ -63,7 +63,7 @@
             <VBox spacing="8" minWidth="0">
                 <Label text="Progress and saving" styleClass="subsection-title" />
                 <Label wrapText="true" minHeight="-Infinity"
-                       text="Flashcard progress and Typing progress are independent, and each is shared across decks. Every recorded outcome updates only the chosen mode's progress from the date you answer. Early reviews in either mode change mastery and scheduling. A skipped typing outcome leaves mastery and correct count unchanged, counts as an attempt, and is due tomorrow." />
+                       text="Flashcard progress and Typing progress are independent, and each is shared across decks. Each mode stores mastery and its next due date. Every recorded outcome updates only the chosen mode's progress from the date you answer. Early reviews in either mode change mastery and scheduling. A skipped typing outcome leaves mastery unchanged, counts as a skipped attempt in the current session, and is due tomorrow." />
                 <Label wrapText="true" minHeight="-Infinity"
                        text="Koko saves each outcome automatically. If saving fails, no progress is recorded. Retry Correct or Incorrect in Flashcard, or Submit or Skip in Typing. You can also choose Stop." />
             </VBox>
