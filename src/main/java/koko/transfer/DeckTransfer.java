@@ -140,13 +140,8 @@ public final class DeckTransfer {
                     .toAbsolutePath(), inspectDestination(chooserPath));
         }
 
-        /** Binds a checked path to its snapshot, rejecting unavailable file identity. */
-        private ConfirmedDestination(Path path, DestinationSnapshot snapshot)
-                throws DeckTransferException {
-            if (snapshot != null && snapshot.fileKey() == null) {
-                throw new DeckTransferException("This provider cannot identify an existing export "
-                        + "safely; choose a new filename");
-            }
+        /** Binds an inspected path to the snapshot captured for it. */
+        private ConfirmedDestination(Path path, DestinationSnapshot snapshot) {
             this.path = path;
             this.snapshot = snapshot;
         }
@@ -245,14 +240,18 @@ public final class DeckTransfer {
     /**
      * Validates and writes a portable deck, honoring native-confirmed replacement.
      *
-     * <p>Replacement is performed only when the confirmation path identifies the
-     * same actual regular file as the final destination. The complete document is
+     * <p>Replacement is limited to the final path captured by the native selection,
+     * and the destination must remain a regular file. The complete document is
      * serialized before an operation-owned sibling temporary file is created,
      * written, closed, and atomically moved into place. A destination captured
      * as absent keeps create-new behavior.
      *
-     * <p>File identity, size, and modification time detect observable changes.
-     * The native-dialog-to-capture and final-check-to-move intervals still allow
+     * <p>Size, modification time, and file identity where the provider exposes it
+     * provide best-effort change detection. A missing file key does not block
+     * replacement, but a different file with the same size and modification time
+     * can go undetected at the approved path, even before export starts.
+     *
+     * <p>The native-dialog-to-capture and final-check-to-move intervals also allow
      * races, including concurrent writers and parent-directory swaps. This is
      * not a locking protocol and does not promise power-loss durability.
      *
@@ -449,10 +448,16 @@ public final class DeckTransfer {
      */
     private record DestinationSnapshot(Object fileKey, long size, FileTime modifiedTime) {
 
-        /** Requires known, matching identity, size, and modification time. */
+        /**
+         * Requires matching size, modification time, and identity where it is exposed.
+         *
+         * <p>Providers that expose no file key, including the Windows default provider,
+         * compare on size and modification time alone. They cannot distinguish a
+         * different file with matching metadata at the approved path.
+         */
         private boolean matches(DestinationSnapshot other) {
-            boolean sameFileKey = fileKey != null && Objects.equals(fileKey, other.fileKey);
-            return sameFileKey && size == other.size && modifiedTime.equals(other.modifiedTime);
+            return Objects.equals(fileKey, other.fileKey)
+                    && size == other.size && modifiedTime.equals(other.modifiedTime);
         }
     }
 

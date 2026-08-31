@@ -3,6 +3,7 @@ package koko.transfer;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -430,6 +431,11 @@ class DeckTransferTest {
     @Test
     void capturedExistingIdentityCannotBeReusedForAnotherFileWithTheSameMetadata() throws Exception {
         Path path = Files.writeString(temporaryDirectory.resolve("identity.json"), "old");
+        // Size and modification time are matched deliberately below, so only a file key
+        // can separate the two files. Providers without one, such as the Windows default
+        // provider, cannot make this distinction and allow the replacement.
+        Assumptions.assumeTrue(Files.readAttributes(path, BasicFileAttributes.class)
+                .fileKey() != null, "Requires provider file keys");
         var confirmation = new DeckTransfer.ConfirmedDestination(path);
         var originalTime = Files.getLastModifiedTime(path);
         Path replacement = Files.writeString(temporaryDirectory.resolve("different-file.json"), "new");
@@ -539,6 +545,8 @@ class DeckTransferTest {
         Path unrelated = Files.writeString(visible.resolve("export.json"), "unconfirmed sentinel");
         Path actual = Files.writeString(actualParent.resolve("export.json"), "confirmed sentinel");
         Path chosen = link.resolve("../export.json");
+        Assumptions.assumeTrue(Files.isSameFile(chosen, actual),
+                "Requires Unix-style symbolic-link parent traversal");
         var confirmation = new DeckTransfer.ConfirmedDestination(chosen);
         PortableDeck document = new PortableDeck(1, "Animals", List.of());
 
@@ -549,21 +557,66 @@ class DeckTransferTest {
     }
 
     @Test
-    void providerWithoutFileIdentityAllowsNewExportsButRejectsReplacement() throws Exception {
+    void providerWithoutFileIdentityStillReplacesAConfirmedDestination() throws Exception {
         try (var fileSystem = FileSystems.newFileSystem(temporaryDirectory.resolve("provider.zip"),
                 Map.of("create", "true"))) {
             Path path = fileSystem.getPath("/export.json");
-            PortableDeck document = new PortableDeck(1, "Animals", List.of());
-            new DeckTransfer().write(document, path);
+            new DeckTransfer().write(new PortableDeck(1, "Animals", List.of()), path);
             Assumptions.assumeTrue(Files.readAttributes(path, BasicFileAttributes.class)
                     .fileKey() == null, "Requires a provider without file keys");
-            byte[] original = Files.readAllBytes(path);
+            PortableDeck replacement = new PortableDeck(1, "Plants", List.of());
 
-            assertThrows(DeckTransferException.class, () ->
-                    new DeckTransfer.ConfirmedDestination(path));
+            new DeckTransfer().write(replacement, new DeckTransfer.ConfirmedDestination(path));
 
-            assertArrayEquals(original, Files.readAllBytes(path));
+            assertEquals(replacement, new DeckTransfer().read(path));
+            assertNoTemporaryFile(path);
+        }
+    }
+
+    @Test
+    void providerWithoutFileIdentityAllowsSameMetadataSwapAtConfirmedPath() throws Exception {
+        try (var fileSystem = FileSystems.newFileSystem(temporaryDirectory.resolve("provider.zip"),
+                Map.of("create", "true"))) {
+            Path path = Files.writeString(fileSystem.getPath("/export.json"), "old");
+            var attributes = Files.readAttributes(path, BasicFileAttributes.class);
+            Assumptions.assumeTrue(attributes.fileKey() == null, "Requires a provider without file keys");
+            var confirmation = new DeckTransfer.ConfirmedDestination(path);
+            Path swapped = Files.writeString(fileSystem.getPath("/other.json"), "new");
+            Files.move(swapped, path, StandardCopyOption.REPLACE_EXISTING);
+            Files.setLastModifiedTime(path, attributes.lastModifiedTime());
+            assertEquals("new", Files.readString(path));
+            assertEquals(attributes.size(), Files.size(path));
+            assertEquals(attributes.lastModifiedTime(), Files.getLastModifiedTime(path));
+            PortableDeck document = new PortableDeck(1, "Animals", List.of());
+
+            // Consent applies to this path; matching metadata cannot reveal the swap without a file key.
+            new DeckTransfer().write(document, confirmation);
+
             assertEquals(document, new DeckTransfer().read(path));
+            assertNoTemporaryFile(path);
+        }
+    }
+
+    @Test
+    void providerWithoutFileIdentityStillDetectsAChangedTarget() throws Exception {
+        try (var fileSystem = FileSystems.newFileSystem(temporaryDirectory.resolve("provider.zip"),
+                Map.of("create", "true"))) {
+            Path path = fileSystem.getPath("/export.json");
+            new DeckTransfer().write(new PortableDeck(1, "Animals", List.of()), path);
+            Assumptions.assumeTrue(Files.readAttributes(path, BasicFileAttributes.class)
+                    .fileKey() == null, "Requires a provider without file keys");
+            var confirmation = new DeckTransfer.ConfirmedDestination(path);
+            long confirmedSize = Files.size(path);
+            String changed = "changed by another writer after the destination was confirmed";
+            Files.writeString(path, changed, StandardCharsets.UTF_8);
+            // Zip timestamps are coarse, so size must carry detection on its own here.
+            assertNotEquals(confirmedSize, Files.size(path));
+
+            assertThrows(DeckTransferException.class, () -> new DeckTransfer()
+                    .write(new PortableDeck(1, "Plants", List.of()), confirmation));
+
+            assertEquals(changed, Files.readString(path, StandardCharsets.UTF_8));
+            assertNoTemporaryFile(path);
         }
     }
 

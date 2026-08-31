@@ -574,8 +574,6 @@ class KokoServiceTransferTest {
 
         assertProtectedDestination(service, deck, storagePath);
         assertProtectedDestination(service, deck, storagePath.toAbsolutePath());
-        assertProtectedDestination(service, deck,
-                Path.of("").toAbsolutePath().relativize(storagePath));
 
         Path hardLink = libraryDirectory.resolve("hard-link.json");
         try {
@@ -591,6 +589,25 @@ class KokoServiceTransferTest {
             assertProtectedDestination(service, deck, caseAlias);
         }
         assertArrayEquals(originalBytes, Files.readAllBytes(storagePath));
+    }
+
+    @Test
+    void relativeConfiguredStoragePathIsProtectedAtServiceBoundary() throws Exception {
+        // Keep this disposable file on the working-directory drive, including on Windows CI.
+        Path relative = Files.createTempFile(Path.of("."), "koko-test-library-", ".json");
+        try {
+            assertFalse(relative.isAbsolute());
+            KokoService service = new KokoService(new JsonStorage(relative), FIRST_CLOCK);
+            Deck deck = service.createDeck("Keep this library");
+            byte[] original = Files.readAllBytes(relative);
+
+            assertProtectedDestination(service, deck, relative);
+            assertProtectedDestination(service, deck, relative.toAbsolutePath());
+
+            assertArrayEquals(original, Files.readAllBytes(relative));
+        } finally {
+            Files.deleteIfExists(relative);
+        }
     }
 
     @Test
@@ -613,7 +630,7 @@ class KokoServiceTransferTest {
     }
 
     @Test
-    void configuredStorageRetainsLinkedDirectoryParentTraversalSemantics() throws Exception {
+    void configuredStorageProtectsProviderResolvedParentTraversal() throws Exception {
         Path visible = Files.createDirectory(temporaryDirectory.resolve("visible"));
         Path actualParent = Files.createDirectory(temporaryDirectory.resolve("actual"));
         Path child = Files.createDirectory(actualParent.resolve("child"));
@@ -624,7 +641,8 @@ class KokoServiceTransferTest {
             Assumptions.assumeTrue(false, "Symbolic links are unsupported: " + exception);
         }
         Path configured = link.resolve("../library.json");
-        Path actual = actualParent.resolve("library.json");
+        // Unix traverses the link first; Windows resolves .. against the visible parent.
+        Path actual = configured.getParent().toRealPath().resolve("library.json");
         JsonStorage storage = new JsonStorage(configured);
         KokoService service = new KokoService(storage, FIRST_CLOCK);
         Deck deck = service.createDeck("Keep this library");
@@ -757,11 +775,19 @@ class KokoServiceTransferTest {
                 progress.correctAttempts(), progress.lastReviewedDate(), progress.nextDueDate());
     }
 
+    /**
+     * Checks service rejection without mistaking a confirmation failure for service protection.
+     *
+     * <p>The confirmation is prepared outside the assertion so that a failure to capture
+     * the destination surfaces as an error rather than passing for the wrong reason.
+     *
+     * @throws DeckTransferException if the confirmation cannot be prepared.
+     */
     private static void assertProtectedDestination(KokoService service, Deck deck,
-            Path destination) throws IOException {
+            Path destination) throws DeckTransferException {
         assertThrows(DeckTransferException.class, () -> service.exportDeck(deck.id(), destination));
-        assertThrows(DeckTransferException.class, () -> service.exportDeck(deck.id(),
-                new koko.transfer.DeckTransfer.ConfirmedDestination(destination)));
+        var confirmation = new koko.transfer.DeckTransfer.ConfirmedDestination(destination);
+        assertThrows(DeckTransferException.class, () -> service.exportDeck(deck.id(), confirmation));
     }
 
     /** Records save calls and retains detached snapshots for assertions. */
