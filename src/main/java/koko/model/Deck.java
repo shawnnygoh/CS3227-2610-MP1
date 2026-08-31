@@ -19,7 +19,8 @@ public final class Deck {
      * Creates a deck with a new stable identity.
      *
      * @param name deck name.
-     * @throws IllegalArgumentException if name is blank.
+     * @throws IllegalArgumentException if name is blank or contains an unpaired
+     *         Unicode surrogate.
      * @throws NullPointerException if name is null.
      */
     public Deck(String name) {
@@ -41,7 +42,8 @@ public final class Deck {
      * @param name deck name.
      * @param restoredCardIds ordered global card UUID references.
      * @return the restored deck.
-     * @throws IllegalArgumentException if the name is blank or a card reference is duplicated.
+     * @throws IllegalArgumentException if the name is blank, contains an unpaired
+     *         Unicode surrogate, or a card reference is duplicated.
      * @throws NullPointerException if an argument or card reference is null.
      */
     public static Deck restore(UUID id, String name, List<UUID> restoredCardIds) {
@@ -57,7 +59,8 @@ public final class Deck {
      * Renames this deck after trimming its new name.
      *
      * @param newName replacement deck name.
-     * @throws IllegalArgumentException if newName is blank.
+     * @throws IllegalArgumentException if newName is blank or contains an unpaired
+     *         Unicode surrogate.
      * @throws NullPointerException if newName is null.
      */
     void rename(String newName) {
@@ -110,7 +113,8 @@ public final class Deck {
      *
      * @param value deck name to normalize.
      * @return the trimmed deck name.
-     * @throws IllegalArgumentException if the name is blank.
+     * @throws IllegalArgumentException if the name is blank or contains an unpaired
+     *         Unicode surrogate.
      * @throws NullPointerException if value is null.
      */
     public static String normalizeName(String value) {
@@ -123,6 +127,25 @@ public final class Deck {
         if (trimmed.isEmpty()) {
             throw new IllegalArgumentException(fieldName + " cannot be blank");
         }
+        if (containsUnpairedSurrogate(trimmed)) {
+            throw new IllegalArgumentException(fieldName + " must contain valid Unicode text");
+        }
         return trimmed;
+    }
+
+    private static boolean containsUnpairedSurrogate(String value) {
+        for (int index = 0; index < value.length(); index++) {
+            char current = value.charAt(index);
+            if (Character.isHighSurrogate(current)) {
+                if (index + 1 >= value.length()
+                        || !Character.isLowSurrogate(value.charAt(index + 1))) {
+                    return true;
+                }
+                index++;
+            } else if (Character.isLowSurrogate(current)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

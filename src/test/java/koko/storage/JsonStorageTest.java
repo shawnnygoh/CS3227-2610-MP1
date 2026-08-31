@@ -119,6 +119,30 @@ class JsonStorageTest {
     }
 
     @Test
+    void malformedStoredDeckNameFailsLoadingWithoutRewritingBytes() throws Exception {
+        Path path = writeDocument(validInternalDocument().replace("\"name\":\"Core\"",
+                "\"name\":\"\\uD800\""));
+        byte[] originalBytes = Files.readAllBytes(path);
+
+        assertThrows(StorageException.class, () -> new JsonStorage(path).load());
+
+        assertArrayEquals(originalBytes, Files.readAllBytes(path));
+    }
+
+    @Test
+    void validSupplementaryDeckNameSurvivesSaveAndLoad() throws StorageException {
+        Path path = temporaryDirectory.resolve("supplementary-name.json");
+        String name = "Animals \uD83D\uDC3B";
+        KokoData original = new KokoData();
+        original.createDeck(name);
+
+        JsonStorage storage = new JsonStorage(path);
+        storage.save(original);
+
+        assertEquals(name, storage.load().decks().getFirst().name());
+    }
+
+    @Test
     void persistedFlashcardOutcomeRoundTripsThroughJsonStorage() throws StorageException {
         Path path = temporaryDirectory.resolve("outcome.json");
         Clock clock = Clock.fixed(Instant.parse("2026-08-29T01:00:00Z"),

@@ -1,7 +1,6 @@
 package koko.service;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
@@ -116,9 +115,6 @@ public final class KokoService {
             throws DeckTransferException, StorageException {
         deckTransfer.validate(document);
         String normalizedName = Deck.normalizeName(confirmedName);
-        if (!StandardCharsets.UTF_8.newEncoder().canEncode(normalizedName)) {
-            throw new IllegalArgumentException("Deck name must contain valid Unicode text");
-        }
         KokoData candidate = copyOf(data);
         Deck importedDeck = candidate.createDeck(normalizedName);
         LocalDate importDate = LocalDate.now(clock);

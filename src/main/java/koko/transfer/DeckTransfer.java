@@ -546,12 +546,6 @@ public final class DeckTransfer {
         } catch (RuntimeException exception) {
             throw invalid("deckName is invalid: " + describe(exception), exception);
         }
-        // JSON escapes can introduce unpaired surrogates even in a valid UTF-8 file.
-        // Reject them before persistence or export could lose the original text.
-        if (!StandardCharsets.UTF_8.newEncoder().canEncode(document.deckName())) {
-            throw invalid("deckName must contain valid Unicode text");
-        }
-
         List<PortableCard> validatedCards = new ArrayList<>();
         for (int index = 0; index < document.cards().size(); index++) {
             PortableCard card = document.cards().get(index);

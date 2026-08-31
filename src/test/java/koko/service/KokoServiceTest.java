@@ -183,6 +183,34 @@ class KokoServiceTest {
     }
 
     @Test
+    void invalidUnicodeDeckNamesAreRejectedBeforePublication() throws StorageException {
+        FakeStorage storage = new FakeStorage();
+        KokoService service = new KokoService(storage, FIXED_CLOCK);
+        VocabularyCard card = service.addVocabularyCard("ねこ", "neko", "cat");
+        Deck deck = service.createDeck("Existing");
+        service.addCardToDeck(deck.id(), card.id());
+        KokoData originalData = service.data();
+        Deck originalDeck = currentDeck(service, deck.id());
+        VocabularyCard originalCard = currentCard(service, card.id());
+        int savesBefore = storage.saveInvocations;
+
+        for (char surrogate : new char[] {'\uD800', '\uDC00'}) {
+            String invalidName = "Deck " + surrogate;
+            assertThrows(IllegalArgumentException.class, () ->
+                    service.createDeck(invalidName));
+            assertThrows(IllegalArgumentException.class, () ->
+                    service.renameDeck(deck.id(), invalidName));
+        }
+
+        assertEquals(savesBefore, storage.saveInvocations);
+        assertSame(originalData, service.data());
+        assertSame(originalDeck, currentDeck(service, deck.id()));
+        assertSame(originalCard, currentCard(service, card.id()));
+        assertEquals("Existing", originalDeck.name());
+        assertEquals(List.of(card.id()), originalDeck.cardIds());
+    }
+
+    @Test
     void failedDeckAndMembershipSavesCanBeRetriedWithoutLeakingChanges()
             throws StorageException {
         FakeStorage storage = new FakeStorage();

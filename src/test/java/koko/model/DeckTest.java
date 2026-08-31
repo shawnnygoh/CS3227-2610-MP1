@@ -24,6 +24,20 @@ class DeckTest {
     }
 
     @Test
+    void deckRejectsUnpairedSurrogatesButPreservesSupplementaryCharacters() {
+        String supplementaryName = "Core \uD83D\uDCDA";
+        Deck deck = new Deck("  " + supplementaryName + "  ");
+
+        assertEquals(supplementaryName, deck.name());
+        assertThrows(IllegalArgumentException.class, () ->
+                new Deck("Core " + String.valueOf('\uD800')));
+        assertThrows(IllegalArgumentException.class, () ->
+                new Deck("Core " + String.valueOf('\uDC00')));
+        assertThrows(IllegalArgumentException.class, () ->
+                Deck.restore(UUID.randomUUID(), "Core " + String.valueOf('\uD800'), List.of()));
+    }
+
+    @Test
     void deckKeepsInsertionOrderAndRejectsDuplicateReferences() {
         Deck deck = new Deck("Core words");
         UUID first = UUID.randomUUID();
